@@ -1,0 +1,11 @@
+{
+  "name": "medq-frontend",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "npx serve frontend/public -l 3000"
+  },
+  "devDependencies": {
+    "serve": "^14.2.3"
+  }
+}

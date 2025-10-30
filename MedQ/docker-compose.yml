@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: medq
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  api:
+    build:
+      context: ./backend
+    command: python -m src.config.main
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/medq
+    volumes:
+      - ./backend:/app
+    ports: ["5000:5000"]
+    depends_on: [db]
+  web:
+    working_dir: /app
+    image: node:20
+    command: bash -lc "npm install && npm run start"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./frontend/package.json:/app/package.json
+    ports: ["3000:3000"]
+    depends_on: [api]
+volumes:
+  pgdata:
