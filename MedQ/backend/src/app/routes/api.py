@@ -13,3 +13,4 @@ def check_in():
     payload = request.get_json(force=True, silent=True) or {}
     # TODO: write to database
     return jsonify(message='checked in', data=payload), 201
+
