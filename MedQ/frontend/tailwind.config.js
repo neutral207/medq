@@ -8,6 +8,7 @@ export default {
     extend: {
       colors: {
         medqPink: "#FF8CC6", // primary color
+        medqAltPink: "#D1236C", // alternative color
         medqDark: "#2D3047", // background gradient top
         medqDeep: "#6E75AD", // background gradient bottom
       },
