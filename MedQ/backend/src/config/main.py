@@ -12,6 +12,11 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
     app.config['SECRET_KEY'] = 'replace-me'
+    app.config['JWT_SECRET_KEY'] = 'super_secret_key_change_me'
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600 #this is a 1 hour token lifeltime
+
+    #this is intialize JWT
+    jwt = JWTManager(app)
 
     # Register blueprints
     from app.routes.api import api_bp
