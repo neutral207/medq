@@ -56,21 +56,21 @@ export default function PatientCheckIn() {
   };
 
   return (
-    <div className='min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white'>
+    <div className='min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto'>
       {/* Header */}
-      <header className='pt-6 pb-0 flex flex-col items-center pointer-events-none'>
+      <header className='pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 sm:mb-6'>
           <img
             src={medqLogo}
             alt="Med-Q Logo"
-            className='block w-48 h-48 md:w-52 md:h-52 object-contain drop-shadow-lg mb-[-42px]'
+            className='block h-32 object-contain drop-shadow-lg'
           />
-          <h1 className='text-2xl md:text-[42px] tracking-wide text-white'>
+          <h1 className='text-2xl md:text-[42px] tracking-wide text-white leading-tight'>
             Med-Q
           </h1>
       </header>
 
       {/* Form */}
-      <main className='px-6 flex items-center justify-center'>
+      <main className='px-6 flex justify-center py-8 md:py-12'>
         <form 
           onSubmit={handleSubmit} 
           className='w-[360px] space-y-4 text-[15px] font-medium'
@@ -104,7 +104,7 @@ export default function PatientCheckIn() {
                 name='dob'
                 value={formData.dob}
                 onChange={handleChange}
-                className='w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none'
+                className='w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 focus:border-medqPink outline-none uppercase'
                 required
               />
             </label>
@@ -112,15 +112,15 @@ export default function PatientCheckIn() {
           
           {/* Reason */}
           <div className='space-y-1'>
-            <label className='text-sm block mb-1'>Reason for Visit:</label>
+            <label className='text-sm block'>Reason for Visit:</label>
             {!isReasonOpen && (
               <button
                 type='button'
                 onClick={openReasonList}
                 className='w-full text-left rounded-md bg-transparent border border-white/30 px-3 py-2
-                           text-white/80 hover:text-white focus:border-medqPink outline-none'
+                           text-white/50 hover:text-white focus:border-medqPink outline-none'
                 aria-haspopup="listbox"
-                aria-expanded={isReasonOpen}
+                aria-expanded={isReasonOpen}  
               >
                 {formData.reason ? formData.reason : "Select a reason..."}
               </button>
@@ -158,7 +158,7 @@ export default function PatientCheckIn() {
                 onChange={handleChange}
                 placeholder='Briefly describe your reason'
                 className="mt-2 w-full rounded-md bg-transparent border border-white/30 text-white
-                placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-pink-400 py-2 px-3"
+                placeholder-white/50 focus:outline-none focus:border-medqPink px-3 py-2"
                 required
               />
             )}
