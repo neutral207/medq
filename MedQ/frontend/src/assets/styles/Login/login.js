@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
         message.textContent = data.message;
         message.style.color = "green";
 
-        // Redirect based on role
+        // this redirect based on role of staff 
         if (data.role === "admin") {
           window.location.href = "admin_dashboard.html";
         } else if (data.role === "staff") {
