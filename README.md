@@ -85,7 +85,8 @@ is a real-time patient flow and queue management system designed to reduce medic
 ## License
 This project is licensed under the **MIT License** – free for modification and distribution with attribution.
 
-## Contributors 
+## Contributors
+- ** Chad Gibson** - Mentor/instructor
 - **Joel Simpson** – Project Lead, Backend Developer  
 - **Amy Darr** -  UI and dashboard design  
 - **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
