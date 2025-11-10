@@ -1,0 +1,24 @@
+{
+    "python2.testing.pytestArgs": [
+        "MedQ"
+    ],
+    "python2.testing.unittestEnabled": false,
+    "python2.testing.nosetestsEnabled": false,
+    "python2.testing.pytestEnabled": true,
+    "python2.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./MedQ",
+        "-p",
+        "*test.py"
+    ],
+    "python2.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./MedQ",
+        "-p",
+        "test*.py"
+    ],
+    "python2.testing.pytestEnabled": false,
+    "python2.testing.unittestEnabled": true
+}
