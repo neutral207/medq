@@ -2,7 +2,7 @@
 
 ## Introduction 
 **Med-Q Optimization Dashboard**
-is a real-time patient flow and queue management system designed to reduce medical wait times and inprove transparency for patients. This platform empowers medical offices administrators with predictive and analytics to anticipate patients surges and allocate resources efficienly helping patients feel more informed and reducing stress during their waiting experience.
+Is a real-time patient flow and queue management system designed to reduce medical wait times and inprove transparency for patients. This platform empowers medical offices administrators with predictive and analytics to anticipate patients surges and allocate resources efficienly helping patients feel more informed and reducing stress during their waiting experience.
 
 ---
 
@@ -90,11 +90,12 @@ This project is licensed under the **MIT License** – free for modification and
 - **Amy Darr** -  UI and dashboard design  
 - **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
 deployment 
-- **Cheyenne McManhan** - - Machine Learning Engineer – Prediction model creation and maintenance  
+- **Cheyenne McManhan** - Machine Learning Engineer – Prediction model creation and maintenance  
 
  - QA Engineer – API and UI testing
 
-  ** Project Status 
+  **Project Status** 
+
   **Status:** Pre-Alpha
   The sataus of the project is settting everything up. 
   
