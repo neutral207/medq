@@ -32,7 +32,7 @@ export default function Landing() {
       <footer className="px-6 py-4 text-center text-sm text-white/80">
         Admins and Staff may login{" "}
         <Link
-          to="/login"
+          to="/staff-login"
           className="font-semibold text-medqPink hover:text-medqAltPink underline underline-offset-2"
         >
           here

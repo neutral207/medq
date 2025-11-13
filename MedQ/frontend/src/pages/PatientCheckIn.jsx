@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import medqLogo from "../assets/images/medq-logo.png";
 
 const REASONS = [
@@ -11,6 +12,8 @@ const REASONS = [
 ];
 
 export default function PatientCheckIn() {
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     name: "",
     dob: "",
@@ -53,6 +56,8 @@ export default function PatientCheckIn() {
     // TODO: Implement into database
     console.log("Submitted:", formData);
     alert("Check-in data submitted");
+
+    navigate("/queue-status");
   };
 
   return (
