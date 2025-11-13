@@ -1,6 +1,7 @@
 # MedQ Backend Entry Point
 # Flask app with Socket.IO ready structure
 
+from flask_jwt_extended import JWTManager
 from flask import Flask, jsonify
 from flask_cors import CORS
 try:
@@ -34,6 +35,6 @@ if __name__ == '__main__':
     # Dev server
     if SocketIO:
         socketio = SocketIO(app, cors_allowed_origins='*')
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+        socketio.run(app, host='0.0.0.0', port=8080, debug=True)
     else:
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        app.run(host='0.0.0.0', port=8080, debug=True)
