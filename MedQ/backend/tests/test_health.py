@@ -36,3 +36,10 @@ def test_checkin_invalid_severity():
     payload = {"department":"ER","severity":9}
     r = c.post('/api/checkin', data=json.dumps(payload), headers={"Content-Type":"application/json"})
     assert r.status_code == 422
+
+    import os, pytest, subprocess
+
+@pytest.fixture(scope="session", autouse=True)
+def migrate_db():
+    os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/medq_test")
+    subprocess.check_call(["alembic", "upgrade", "head"])
