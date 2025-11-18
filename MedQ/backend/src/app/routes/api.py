@@ -1,15 +1,17 @@
-# app/routes/api.py
 from flask import Blueprint, request, jsonify
+from src.app.errors import ApiError
 
-api_bp = Blueprint('api', __name__)
+api_bp = Blueprint("api", __name__)
 
-@api_bp.get('/queue')
+@api_bp.get("/queue")
 def get_queue():
-    # TODO: fetch from database
-    return jsonify(department='ER', queue=[])
+    return jsonify(department="ER", queue=[])
 
-@api_bp.post('/checkin')
+@api_bp.post("/checkin")
 def check_in():
-    payload = request.get_json(force=True, silent=True) or {}
-    # TODO: write to database
-    return jsonify(message='checked in', data=payload), 201
+    if not request.is_json:
+        raise ApiError("Content-Type must be application/json", code=415)
+    data = request.get_json(silent=True) or {}
+    if "department" not in data:
+        raise ApiError("Missing field: department", code=422)
+    return jsonify(message="checked in", data=data), 201
