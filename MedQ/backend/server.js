@@ -6,7 +6,7 @@ const bodyParser = require ("body-parser");
 const app = express();
 app.use(bodyParser.json());
 
-// this woild use the secret key 
+// this would use the secret key 
 const JWR_SECRET = "our_secret_key_ here";
 
 // this would be an example user 
