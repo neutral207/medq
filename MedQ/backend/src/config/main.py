@@ -4,6 +4,10 @@ from flask_cors import CORS
 from src.app.errors import register_error_handlers
 from src.app.routes.api import api_bp
 
+
+registration_queue: Deque[Dict] = deque()
+
+
 def create_app():
     app = Flask(__name__)
     CORS(app)
@@ -16,7 +20,6 @@ def create_app():
     def health():
         return jsonify(status="ok")
 
-    return app
 
 # Dev entrypoint
 if __name__ == "__main__":
