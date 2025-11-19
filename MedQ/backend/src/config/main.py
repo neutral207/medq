@@ -4,10 +4,13 @@
 from flask_jwt_extended import JWTManager
 from flask import Flask, jsonify
 from flask_cors import CORS
-try:
-    from flask_socketio import SocketIO
-except Exception:
-    SocketIO = None
+
+from src.app.errors import register_error_handlers
+from src.app.routes.api import api_bp
+
+
+registration_queue: Deque[Dict] = deque()
+
 
 def create_app():
     app = Flask(__name__)
@@ -19,22 +22,15 @@ def create_app():
     #this is intialize JWT
     jwt = JWTManager(app)
 
-    # Register blueprints
-    from app.routes.api import api_bp
-    app.register_blueprint(api_bp, url_prefix='/api')
+    register_error_handlers(app)
+    app.register_blueprint(api_bp, url_prefix="/api")
 
-    @app.get('/health')
+    @app.get("/health")
     def health():
-        return jsonify(status='ok')
+        return jsonify(status="ok")
 
-    return app
 
-app = create_app()
-
-if __name__ == '__main__':
-    # Dev server
-    if SocketIO:
-        socketio = SocketIO(app, cors_allowed_origins='*')
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
-    else:
-        app.run(host='0.0.0.0', port=5000, debug=True)
+# Dev entrypoint
+if __name__ == "__main__":
+    app = create_app()
+    app.run(host="0.0.0.0", port=5000, debug=True)

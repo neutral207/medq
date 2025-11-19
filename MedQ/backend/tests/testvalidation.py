@@ -1,13 +1,7 @@
 import json
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(MedQ), '..')))
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.config.main import create_app
-
-def test_health():
-    app = create_app()
-    client = app.test_client()
-    resp = client.get('/health')
-    assert resp.status_code == 200
-    assert resp.get_json()['status'] == 'ok'
 
 def test_health():
     app = create_app()
@@ -36,10 +30,3 @@ def test_checkin_invalid_severity():
     payload = {"department":"ER","severity":9}
     r = c.post('/api/checkin', data=json.dumps(payload), headers={"Content-Type":"application/json"})
     assert r.status_code == 422
-
-    import os, pytest, subprocess
-
-@pytest.fixture(scope="session", autouse=True)
-def migrate_db():
-    os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/medq_test")
-    subprocess.check_call(["alembic", "upgrade", "head"])
