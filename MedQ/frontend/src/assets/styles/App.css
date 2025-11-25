@@ -4,31 +4,190 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
+@layer base {
+  :root {
+    /* Background / Text */
+    --bg: #020617;
+    --text: #FFFFFF;
+    --muted: #BFC7D5;
+    --border: rgba(255, 255, 255, 0.15);
+    --highlight: #717BA6;
+
+    /* Brand Colors */
+    --primary: theme('colors.medqPink');
+    --primary-alt: #FF9AD0;
+    /*theme('colors.medqAltPink');*/
+    --grad-top: #2A2E4A;
+    /*theme('colors.medqDark');*/
+    --grad-bottom: #434667;
+    /*theme('colors.medqDeep');*/
+
+    /* Surface */
+    --surface-1: rgba(255, 255, 255, 0.05);
+    --surface-2: #57677E;
+    --surface-border: rgba(255, 255, 255, 0.12);
+
+    /* Focus / Radius */
+    --focus-border: theme('colors.medqPink');
+    --focus-ring-inner: 0 0 0 1px theme('colors.medqPink');
+    --focus-ring-outer: 0 0 12px rgba(255, 140, 198, 0.8);
+
+    /* Status / Queue */
+    --status-waiting: #FFDE6B;
+    --status-progress: #7CCBFF;
+    --status-complete: #72E28C;
+
+    /* Shadows */
+    --shadow-s:
+      inset 0 1px 2px #ffffff30,
+      /* top highlight */
+      0 1px 2px #00000030,
+      /* dark shadow */
+      0 2px 4px #00000015;
+    /* soft shadow */
+
+    --shadow-m:
+      inset 0 1px 2px #ffffff50,
+      /* top highlight */
+      0 2px 4px #00000030,
+      /* dark shadow */
+      0 4px 8px #00000015;
+    /* soft shadow */
+
+    --shadow-l:
+      inset 0 1px 2px #ffffff70,
+      /* top highlight */
+      0 4px 6px #00000030,
+      /* dark shadow */
+      0 6px 10px #00000015;
+    /* soft shadow */
+
+  }
+
+  :root[data-theme="light"] {
+    --bg: #F9FAFB;
+    --text: #020617;
+    --muted: #64748B;
+    --border: #CBD5F5;
+    --highlight: #E2E8F0;
+
+    --primary: theme('colors.medqPink');
+    --primary-alt: theme('colors.medqAltPink');
+    --grad-top: #F9FAFB;
+    --grad-bottom: #E2E8F0;
+  }
+}
+
+html,
+body,
+#root {
   height: 100%;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'Ubuntu', sans-serif;
 }
 
-
+/* Date Icon */
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(55%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(99%) contrast(93%);
   cursor: pointer;
 }
 
-input:focus {
-  outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
-  border-color: #FF8CC6;
-}
+@layer components {
+  /* Patient Check In Page */
 
-select:focus {
-  outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
-  border-color: #FF8CC6;
-}
+  /* Page wrapper with gradient */
+  .medq-page {
+    @apply min-h-screen flex flex-col overflow-y-auto;
+    background: linear-gradient(to bottom, var(--grad-top), var(--grad-bottom));
+    color: var(--text);
+  }
 
-button:focus {
-  outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
-  border-color: #FF8CC6;
+  /* Centered form container */
+  .medq-form-shell {
+    @apply px-6 flex justify-center py-8 md:py-12;
+  }
+
+  .medq-form-card {
+    @apply rounded-xl p-6 md:p-8;
+    width: 360px;
+    background: var(--surface-1);
+    box-shadow: var(--shadow-m);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--surface-border);
+  }
+
+  /* Form width */
+  .medq-form {
+    @apply w-[360px] space-y-4 text-[15px] font-medium;
+  }
+
+  .medq-form-title {
+    @apply text-lg font-semibold leading-snug mb-4;
+  }
+
+  /* Field label */
+  .medq-field-label {
+    @apply text-sm block mb-1;
+  }
+
+  /* Base input/select/textarea style */
+  .medq-field {
+    width: 100%;
+    border-radius: var(--radius-md);
+    background: var(--grad-top);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9375rem;
+    box-shadow: var(--shadow-s);
+    transition: box-shadow .15s;
+  }
+
+  .medq-field::placeholder {
+    color: #ffffff30;
+  }
+
+  /* Shared focus ring for inputs/selects/textareas */
+  .medq-field:focus {
+    outline: none;
+    border-color: var(--focus-border);
+    box-shadow: var(--focus-ring), var(--shadow-s);
+  }
+
+  /* Reason picker button style */
+  .medq-field-button {
+    @apply text-left;
+  }
+
+  /* Primary button */
+  .medq-btn-primary {
+    @apply w-full mt-4 py-2 rounded-md font-semibold transition-colors;
+    background: var(--primary);
+    box-shadow: var(--shadow-s);
+    backdrop-filter: blur(6px);
+  }
+
+  .medq-btn-primary:hover {
+    background: var(--primary-alt);
+  }
+
+  .medq-btn-primary:focus {
+    outline: none;
+    box-shadow: var(--focus-ring), var(--shadow-m);
+  }
+
+  /* Logo header reused across pages */
+  .medq-logo-header {
+    @apply pt-6 flex flex-col items-center;
+  }
+
+  .medq-logo-header img {
+    @apply block h-32 object-contain drop-shadow-lg;
+  }
+
+  .medq-logo-header h1 {
+    @apply text-2xl md:text-[42px] tracking-wide leading-tight;
+    color: var(--text);
+  }
 }

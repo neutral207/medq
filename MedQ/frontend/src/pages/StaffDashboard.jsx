@@ -1,17 +1,26 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const MOCK_QUEUE = [
-  { id: 1, status: "waiting", name: "Gustavo", dept: "ER", eta: "15min", color: "bg-yellow-400" },
-  { id: 2, status: "in-progress", name: "Joel", dept: "ER", eta: "15min", color: "bg-cyan-400" },
-  { id: 3, status: "completed", name: "Amy", dept: "ER", eta: "15min", color: "bg-green-400" },
-  { id: 4, status: "completed", name: "Cheyenne", dept: "ER", eta: "15min", color: "bg-green-400" }
+  { id: 1, status: "waiting", name: "Gustavo", dept: "ER", eta: "15min" },
+  { id: 2, status: "in-progress", name: "Joel", dept: "ER", eta: "15min" },
+  { id: 3, status: "completed", name: "Amy", dept: "ER", eta: "15min" },
+  { id: 4, status: "completed", name: "Cheyenne", dept: "ER", eta: "15min" }
 ]
 
-function QueueCard({ item, actions }) {
+const STATUS_COLORS = {
+  "waiting": "bg-yellow-400",
+  "in-progress": "bg-cyan-400",
+  "completed": "bg-green-400",
+};
+
+function QueueCard({ item, actions, onViewDetails, onAction }) {
+  const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
+
   return (
     <div className="bg-[#2D3047] rounded-2xl px-4 py-3 mt-3 shadow-md">
       <div className="flex items-start gap-3">
-        <span className={`w-4 h-4 rounded-full mt-1 ${item.color}`} />
+        <span className={`w-3 h-3 rounded-full mt-1 ${dotColor}`} />
         <div className="flex-1 text-sm">
           <p><span className="font-semibold">Name:</span> {item.name}</p>
           <p><span className="font-semibold">Dept:</span> {item.dept}</p>
@@ -19,43 +28,82 @@ function QueueCard({ item, actions }) {
         </div>
       </div>
 
-      {actions && (
-        <div className="mt-3 flex justify-end gap-2 text-xs">
-          {actions.map((label) => (
-            <button 
-              key={label} 
+      <div className="mt-3 flex justify-end gap-2 text-xs">
+        {/* Details Button */}
+        {onViewDetails && (
+          <button
+            onClick={() => onViewDetails(item)}
+            className="rounded-full border border-slate-400/70 px-4 py-1 hover:bg-slate-600/80 transition"
+          >
+            Details
+          </button>
+        )}
+
+        {actions &&
+          actions.map((label) => (
+            <button
+              key={label}
+              onClick={() => onAction && onAction(item, label)}
               className="rounded-full border border-slate-400/70 px-4 py-1 hover:bg-slate-600/80 transition"
             >
               {label}
             </button>
           ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
 
 export default function StaffDashboard() {
+  const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState("2025-10-17"); // placeholder
+  const [queue, setQueue] = useState(MOCK_QUEUE);
 
   const waiting = useMemo(
-    () => MOCK_QUEUE.filter((q) => q.status === "waiting"),
-    []
+    () => queue.filter((q) => q.status === "waiting"),
+    [queue]
   );
 
   const inProgress = useMemo(
-    () => MOCK_QUEUE.filter((q) => q.status === "in-progress"),
-    []
+    () => queue.filter((q) => q.status === "in-progress"),
+    [queue]
   );
 
-    const completed = useMemo(
-    () => MOCK_QUEUE.filter((q) => q.status === "completed"),
-    []
+  const completed = useMemo(
+    () => queue.filter((q) => q.status === "completed"),
+    [queue]
   );
 
   const showSection = (section) =>
     statusFilter === "all" || statusFilter === section;
+
+  function handleViewDetails(item) {
+    navigate(`/patient-details/${item.id}`);
+  }
+
+  function handleAction(item, label) {
+    setQueue((prev) =>
+      prev.map((q) => {
+        if (q.id !== item.id) return q;
+
+        let nextStatus = q.status;
+
+        if (q.status === "waiting") {
+          if (label === "Assign") nextStatus = "in-progress";
+          if (label === "Conclude") nextStatus = "completed";
+        } else if (q.status === "in-progress") {
+          if (label === "Wait") nextStatus = "waiting";
+          if (label === "Conclude") nextStatus = "completed";
+        } else if (q.status === "completed") {
+          if (label === "Wait") nextStatus = "waiting";
+          if (label === "Assign") nextStatus = "in-progress";
+        }
+
+        return {...q, status: nextStatus };
+      })
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
@@ -113,6 +161,8 @@ export default function StaffDashboard() {
                 key={item.id}
                 item={item}
                 actions={["Assign", "Conclude"]}
+                onViewDetails={handleViewDetails}
+                onAction={handleAction}
               />
             ))}
           </section>
@@ -129,6 +179,8 @@ export default function StaffDashboard() {
                 key={item.id}
                 item={item}
                 actions={["Wait", "Conclude"]}
+                onViewDetails={handleViewDetails}
+                onAction={handleAction}
               />
             ))}
           </section>
@@ -145,6 +197,8 @@ export default function StaffDashboard() {
                 key={item.id}
                 item={item}
                 actions={["Wait", "Assign"]}
+                onViewDetails={handleViewDetails}
+                onAction={handleAction}
               />
             ))}
           </section>

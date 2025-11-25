@@ -10,7 +10,7 @@ export default function StaffLogin() {
   const [userId, setUserID] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  
+
   function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -20,7 +20,7 @@ export default function StaffLogin() {
       navigate("/staff-dashboard");
       return;
     }
-    
+
     // Error for wrong credentials.
     setError(
       "Invalid Credentials."
@@ -69,9 +69,15 @@ export default function StaffLogin() {
             </label>
           </div>
 
+          {error && (
+            <p className="mt-2 text-sm text-red-400">
+              {error}
+            </p>
+          )}
+
           {/* Button */}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors"
           >
             Confirm
