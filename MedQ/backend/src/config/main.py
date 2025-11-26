@@ -1,20 +1,17 @@
 # MedQ Backend Entry Point
 # Flask app with Socket.IO ready structure
 
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 from collections import deque
 import uuid
 from typing import Deque, List, Dict
 from datetime import datetime
-
 from flask_socketio import emit
+from flask_jwt_extended import JWTManager
+from flask import Flask, jsonify
+from flask_cors import CORS
 
-
-try:
-    from flask_socketio import SocketIO
-except Exception:
-    SocketIO = None
+from src.app.errors import register_error_handlers
+from src.app.routes.api import api_bp
 
 
 visits_db:  Dict[str, Dict] = {}   #PLACEHOLDER DATABASE
@@ -28,6 +25,8 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
     app.config['SECRET_KEY'] = 'replace-me'
+    app.config['JWT_SECRET_KEY'] = 'super_secret_key_change_me'
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600 #this is a 1 hour token lifeltime
 
 #SOCKETIO INITIALIZATION
     socketio_instance = None
@@ -90,7 +89,7 @@ def create_app():
     def process_next_in_q():
         if not registration_queue:
             return jsonify(error="Queue is Empty."), 404 
-    
+
 
         next_user = registration_queue.popleft()
 
@@ -184,9 +183,16 @@ def create_app():
             else:
                 emit('error', {'message': 'Visit not found'})
     app.socketio = socketio_instance
+    
+    jwt = JWTManager(app)
+
+    register_error_handlers(app)
+    app.register_blueprint(api_bp, url_prefix="/api")
+    
     return app 
 app = create_app()
 
+# Dev entrypoint
 if __name__ == '__main__':
     # Dev server
     if SocketIO:
@@ -194,3 +200,4 @@ if __name__ == '__main__':
         socketio.run(app, host='0.0.0.0', port=5000, debug=True)
     else:
         app.run(host='0.0.0.0', port=5000, debug=True)
+bug=True)

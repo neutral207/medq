@@ -91,3 +91,42 @@ CREATE TABLE IF NOT EXISTS user_roles (
   role_id INT REFERENCES roles(role_id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, role_id)
 );
+
+-- Indexes for performance optimization
+
+-- Fast lookups of queued visits by department and time
+CREATE INDEX IF NOT EXISTS idx_visits_dept_status_time
+  ON visits (dept_id, status, checkin_time);
+
+-- Common filters on status alone
+CREATE INDEX IF NOT EXISTS idx_visits_status
+  ON visits (status);
+
+-- Sort and filter by checkin time
+CREATE INDEX IF NOT EXISTS idx_visits_checkin_time
+  ON visits (checkin_time);
+
+-- Staff load: who is in_service and how many per staff
+CREATE INDEX IF NOT EXISTS idx_visits_assigned_staff_status
+  ON visits (assigned_staff, status);
+
+-- Quick lookup of visits by patient
+CREATE INDEX IF NOT EXISTS idx_visits_patient
+  ON visits (patient_id);
+
+-- Public ETA lookup by anon token
+CREATE INDEX IF NOT EXISTS idx_patients_anon_token
+  ON patients (anon_token);
+
+-- Sometimes you might group or filter by severity
+CREATE INDEX IF NOT EXISTS idx_patients_severity
+  ON patients (severity);
+
+-- Staff by department and active flag
+CREATE INDEX IF NOT EXISTS idx_staff_dept_active
+  ON staff (dept_id, active);
+
+-- Hourly aggregates are already primary keyed by (bucket_start, dept_id)
+-- but this helps when you filter by department first
+CREATE INDEX IF NOT EXISTS idx_wait_agg_dept_bucket
+  ON wait_time_agg_hourly (dept_id, bucket_start);
