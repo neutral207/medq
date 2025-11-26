@@ -9,9 +9,7 @@ def get_queue():
 
 @api_bp.post("/checkin")
 def check_in():
-    if not request.is_json:
-        raise ApiError("Content-Type must be application/json", code=415)
-    data = request.get_json(silent=True) or {}
-    if "department" not in data:
-        raise ApiError("Missing field: department", code=422)
-    return jsonify(message="checked in", data=data), 201
+    payload = request.get_json(force=True, silent=True) or {}
+    # TODO: write to database
+    return jsonify(message='checked in', data=payload), 201
+

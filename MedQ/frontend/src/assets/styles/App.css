@@ -9,7 +9,6 @@ html, body, #root {
   font-family: 'Ubuntu', sans-serif;
 }
 
-
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(55%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(99%) contrast(93%);
   cursor: pointer;
@@ -17,18 +16,53 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
 input:focus {
   outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
+  box-shadow: 0 0 6px #FF8CC6;
   border-color: #FF8CC6;
 }
 
 select:focus {
   outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
+  box-shadow: 0 0 6px #FF8CC6;
   border-color: #FF8CC6;
 }
 
 button:focus {
   outline: none;
-  box-shadow: 0 0 6px #FF8CC6; 
+  box-shadow: 0 0 6px #FF8CC6;
   border-color: #FF8CC6;
+}
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
 }
