@@ -20,16 +20,7 @@ registration_queue: Deque[Dict] = deque()
 def create_app():
     app = Flask(__name__)
     CORS(app)
-<<<<<<< HEAD
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
-=======
-    app.config['SECRET_KEY'] = 'replace-me'
-    app.config['JWT_SECRET_KEY'] = 'super_secret_key_change_me'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600 #this is a 1 hour token lifeltime
-
-    #this is intialize JWT
-    jwt = JWTManager(app)
->>>>>>> f51bff0997f525a91c9b51e9b6b3bda64a708721
 
     register_error_handlers(app)
     app.register_blueprint(api_bp, url_prefix="/api")
@@ -39,9 +30,6 @@ def create_app():
         return jsonify(status="ok")
     
     return app
-
-    # THE FIX
-    return app   # <-- You forgot this!
 
 
 # Dev entrypoint
