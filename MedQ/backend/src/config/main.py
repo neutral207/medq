@@ -1,6 +1,8 @@
 # MedQ Backend Entry Point
 # Flask app with Socket.IO ready structure
 
+from collections import deque
+from typing import Deque, Dict
 from flask_jwt_extended import JWTManager
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -28,6 +30,8 @@ def create_app():
     @app.get("/health")
     def health():
         return jsonify(status="ok")
+    
+    return app
 
 
 # Dev entrypoint
