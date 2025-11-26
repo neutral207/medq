@@ -1,0 +1,48 @@
+# app/routes/api.py
+from datetime import timedelta
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token
+
+api_bp = Blueprint('api', __name__)
+
+@api_bp.get('/queue')
+def get_queue():
+    # TODO: fetch from database
+    return jsonify(department='ER', queue=[])
+
+@api_bp.post('/checkin')
+def check_in():
+    payload = request.get_json(force=True, silent=True) or {}
+    # TODO: write to database
+    return jsonify(message='checked in', data=payload), 201
+
+#login/logout
+USERS = {
+    "ADM1": {"password": "admin123", "role": "admin"},
+    "STF1001": {"password": "staffpass1", "role": "staff"},
+}
+
+@api_bp.get('/login')
+def login():
+    data = request.get_json(force=True, silent=True) or {}
+    employee_number = data.get("employee_number")
+    password = data.get("password")
+
+    user = USERS.get(employee_number)
+    if not user or user["password"] != password:
+        return jsonify({"message": "Invalid employee number or password"}),
+
+    token = create_access_token(
+        identity={"employee_number": employee_number, "role": user["role"]},
+        expires_delta= timedelta(hours1)
+    )
+
+    return jsonify({
+        "message": f"{user['role'].capitalize()} login successfully",
+        "role": user["role"],
+        "token" : token
+    }), 200
+
+@api_bp.post('/logout')
+def logout():
+    return jsonify({"message": "Logged out successfully"}), 200

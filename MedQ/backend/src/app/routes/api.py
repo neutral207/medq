@@ -12,6 +12,7 @@ def get_queue():
 
 @api_bp.post("/checkin")
 def check_in():
+<<<<<<< HEAD
     if not request.is_json:
         raise ApiError("Content-Type must be application/json", code=415)
     data = request.get_json(silent=True) or {}
@@ -60,3 +61,9 @@ def predict_wait():
     return jsonify({
         "predicted_wait_minutes": round(float(prediction), 2)
     })
+=======
+    payload = request.get_json(force=True, silent=True) or {}
+    # TODO: write to database
+    return jsonify(message='checked in', data=payload), 201
+
+>>>>>>> f51bff0997f525a91c9b51e9b6b3bda64a708721

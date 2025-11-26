@@ -7,7 +7,7 @@ export default function QueueStatus() {
   const position = "3";
   const estWaitMinutes = 20;
   const checkinTime = "12:00 PM";
-  const lastUpdated = "12:0 PM";
+  const lastUpdated = "12:30 PM";
 
   return (
     <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
@@ -32,7 +32,7 @@ export default function QueueStatus() {
             </p>
             <p className="text-lg font-semibold">{department}</p>
             <p className="leading-snug">
-              and your urgency level is 
+              and your urgency level is
             </p>
             <p className="text-lg font-semibold">{urgency}</p>
           </div>
