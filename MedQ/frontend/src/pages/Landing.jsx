@@ -5,7 +5,7 @@ export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--grad-top)] to-[var(--grad-bottom)] text-[var(--text)] flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex flex-col">
       {/* content */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
         {/* Logo + Title */}
@@ -23,7 +23,7 @@ export default function Landing() {
         <button
           onClick={() => navigate("/patient-checkin")}
           className="mt-6 rounded-full px-8 py-3 text-base sm:text-lg font-semibold
-                     bg-[var(--primary)] hover:bg-[var(--primary-alt)] transition-colors focus:outline-none"
+                     bg-medqPink hover:bg-medqAltPink transition-colors focus:outline-none"
         >
           Patient Check-in
         </button>
@@ -33,7 +33,7 @@ export default function Landing() {
         Admins and Staff may login{" "}
         <Link
           to="/staff-login"
-          className="font-semibold text-[var(--primary)] hover:text-[var(--primary-alt)] underline underline-offset-2"
+          className="font-semibold text-medqPink hover:text-medqAltPink underline underline-offset-2"
         >
           here
         </Link>.
