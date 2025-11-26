@@ -5,6 +5,28 @@
   text-align: center;
 }
 
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(55%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(99%) contrast(93%);
+  cursor: pointer;
+}
+
+input:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
+
+select:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
+
+button:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
 .logo {
   height: 6em;
   padding: 1.5em;

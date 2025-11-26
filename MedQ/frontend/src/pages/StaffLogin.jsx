@@ -1,6 +1,32 @@
+import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import medqLogo from "../assets/images/medq-logo.png";
 
+const ADMIN_ID = "admin";
+const ADMIN_PASS = "admin";
+
 export default function StaffLogin() {
+  const navigate = useNavigate();
+  const [userId, setUserID] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+
+    // Admin Login: mock credentials.
+    if (userId === ADMIN_ID && password === ADMIN_PASS) {
+      navigate("/staff-dashboard");
+      return;
+    }
+
+    // Error for wrong credentials.
+    setError(
+      "Invalid Credentials."
+    );
+  }
+
   return (
     <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
       {/* Header */}
@@ -14,64 +40,50 @@ export default function StaffLogin() {
       </header>
 
       {/* Form */}
-      <main className='px-6 flex justify-center py-8 md:py-12'>
-        <form className="w-[360px] space-y-4 text-[15px] font-medium">
-          {/* Staff Name */}
-          <div className="space-y-1">
-            <label className="text-sm block mb-1">Staff Name
-              <input
-                type="text"
-                placeholder="Last, First"
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
-                required
-              />
-            </label>
-          </div>
+      <div className='px-6 flex justify-center py-8 md:py-12'>
+        <form className="w-[360px] space-y-4 text-[15px] font-medium" onSubmit={handleSubmit}>
 
           {/* Staff ID */}
           <div className="space-y-1">
             <label className="text-sm block mb-1">Staff ID
               <input
                 type="text"
-                placeholder="Enter ID"
+                value={userId}
+                onChange={(e) => setUserID(e.target.value)}
                 className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
                 required
               />
             </label>
           </div>
 
-          {/* Role */}
+          {/* Password */}
           <div className="space-y-1">
-            <label className="text-sm block mb-1">Role Assignment
+            <label className="text-sm block mb-1">Password
               <input
-                type="text"
-                placeholder="Ex: Triage Nurse"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
                 required
               />
             </label>
           </div>
 
-          {/* Person In Charge */}
-          <div className="space-y-1">
-            <label className="text-sm text-gray-200">Person in Charge Today
-              <input
-                type="text"
-                placeholder="Name"
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
-              />
-            </label>
-          </div>
+          {error && (
+            <p className="mt-2 text-sm text-red-400">
+              {error}
+            </p>
+          )}
 
           {/* Button */}
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors"
           >
             Confirm
           </button>
         </form>
-      </main>
+      </div>
     </div>
   )
 }
