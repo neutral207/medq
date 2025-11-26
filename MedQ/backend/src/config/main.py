@@ -8,6 +8,8 @@ import uuid
 from typing import Deque, List, Dict
 from datetime import datetime
 
+from flask_socketio import emit
+
 
 try:
     from flask_socketio import SocketIO
@@ -162,7 +164,25 @@ def create_app():
     def get_all_visits():
         """Get all visits"""
         return jsonify(list(visits_db.values())), 200
-        
+
+    if socketio_instance:
+        @socketio_instance.on('connect') 
+        def handle_connect():
+            """Handle Client Connection""" 
+            print('Client Connected')  
+            emit('connection_response', {'message': 'Connected to visit updates'})
+        @socketio_instance.on('disconnect')
+        def handle_disconnect():
+            """Handle Client Disconnection"""
+            print('Client Disconnected')
+        @socketio_instance.on('request_visit_update')
+        def handle_visit_request(data):
+            """Handle request for specific visit updates"""
+            user_id = data.get('user_id')
+            if user_id and user_id in visits_db:
+                emit('visit_data', visits_db[user_id])
+            else:
+                emit('error', {'message': 'Visit not found'})
     app.socketio = socketio_instance
     return app 
 app = create_app()
