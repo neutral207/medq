@@ -189,10 +189,6 @@ def get_visit(visit_id):
     }
 
     return jsonify({ "visit": visit })
-    data = request.get_json(silent=True) or {}
-    if "department" not in data:
-        raise ApiError("Missing field: department", code=422)
-    return jsonify(message="checked in", data=data), 201
 
 # Load model at startup
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "wait_time_model.pkl")
