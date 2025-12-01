@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 from logging.config import fileConfig
 import os
 from alembic import context
@@ -19,6 +20,33 @@ target_metadata = None
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
     context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+=======
+import os
+from alembic import context
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config, pool
+
+# Load alembic.ini
+config = context.config
+fileConfig(config.config_file_name)
+
+# Pull database URL from environment (no SQLAlchemy URL needed)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is not set")
+
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
+
+target_metadata = None  # No SQLAlchemy models
+
+def run_migrations_offline():
+    context.configure(
+        url=DATABASE_URL,
+        target_metadata=target_metadata,
+        literal_binds=True,
+    )
+>>>>>>> Stashed changes
     with context.begin_transaction():
         context.run_migrations()
 
@@ -29,7 +57,14 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+<<<<<<< Updated upstream
         context.configure(connection=connection, target_metadata=target_metadata)
+=======
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+        )
+>>>>>>> Stashed changes
         with context.begin_transaction():
             context.run_migrations()
 
