@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
+import { apiRequest } from "../apiClient";
 
 const REASONS = [
   "Fever", "Cough", "Headache", "Chest pain", "Shortness of breath",
@@ -22,6 +23,9 @@ export default function PatientCheckIn() {
     phone: "",
   });
 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const reasonListRef = useRef(null);
 
@@ -39,8 +43,9 @@ export default function PatientCheckIn() {
     setTimeout(() => setIsReasonOpen(false), 100);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
     if (!formData.reason) {
       alert("Please select a reason for your visit.");
@@ -53,11 +58,48 @@ export default function PatientCheckIn() {
       return;
     }
 
-    // TODO: Implement into database
-    console.log("Submitted:", formData);
-    alert("Check-in data submitted");
+    setLoading(true);
 
-    navigate("/queue-status");
+    try {
+      const payload = {
+        name: formData.name,
+        dob: formData.dob,
+        symptoms: formData.reason === "Other" ? formData.customReason : formData.reason,
+        phone: formData.phone,
+        department: "Emergency",
+      };
+
+      const data = await apiRequest("/checkin", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      const { visit } = data;
+      if (!visit) {
+        throw new Error("Missing 'visit' field.");
+      }
+
+      const {
+        visit_id,
+        anon_token,
+        predicted_wait_minutes,
+        department: deptFromServer,
+      } = visit;
+
+      navigate("/queue-status", {
+        state: {
+          visitId: visit_id,
+          anonToken: anon_token,
+          department: deptFromServer || payload.department,
+          initialWait: predicted_wait_minutes,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error submitting check-in.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -179,12 +221,19 @@ export default function PatientCheckIn() {
             </label>
           </div>
 
+          {error && (
+            <p className="text-sm text-red-300 bg-red-900/40 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+
           {/* Button */}
           <button
             type="submit"
-            className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors"
+            disabled={loading}
+            className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors disabled:opacity-60"
           >
-            Continue
+            {loading ? "Submitting..." : "Continue"}
           </button>
         </form>
       </main>
