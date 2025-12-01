@@ -13,6 +13,9 @@ from flask_cors import CORS
 from src.app.errors import register_error_handlers
 from src.app.routes.api import api_bp
 
+from collections import deque
+from typing import Deque, Dict
+import os
 
 visits_db:  Dict[str, Dict] = {}   #PLACEHOLDER DATABASE
 
@@ -24,14 +27,7 @@ STATUSES = ['Checked-In', 'Waiting', 'In Progress', 'Completed', 'Cancelled']
 def create_app():
     app = Flask(__name__)
     CORS(app)
-    app.config['SECRET_KEY'] = 'replace-me'
-    app.config['JWT_SECRET_KEY'] = 'super_secret_key_change_me'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 3600 #this is a 1 hour token lifeltime
-
-#SOCKETIO INITIALIZATION
-    socketio_instance = None
-    if SocketIO:
-        socketio_instance = SocketIO(app, cors_allowed_origins='*')
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
 
     # Register blueprints
     try:
