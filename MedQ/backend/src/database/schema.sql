@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS patients (
   anon_token TEXT NOT NULL UNIQUE,          -- used for public ETA view
   severity INT CHECK (severity BETWEEN 1 AND 5),
   symptoms TEXT,
-  source TEXT NOT NULL CHECK (source IN ('kiosk','mobile','desk')) DEFAULT 'kiosk'
+  source TEXT NOT NULL CHECK (source IN ('kiosk','mobile','desk')) DEFAULT 'kiosk',
+  full_name TEXT,
+  dob DATE, 
+  phone TEXT
 );
 
 -- Visits (one per check-in)

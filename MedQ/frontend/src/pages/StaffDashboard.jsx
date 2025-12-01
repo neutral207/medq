@@ -1,18 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiRequest } from "../apiClient";
 
-const MOCK_QUEUE = [
-  { id: 1, status: "waiting", name: "Gustavo", dept: "ER", eta: "15min" },
-  { id: 2, status: "in-progress", name: "Joel", dept: "ER", eta: "15min" },
-  { id: 3, status: "completed", name: "Amy", dept: "ER", eta: "15min" },
-  { id: 4, status: "completed", name: "Cheyenne", dept: "ER", eta: "15min" }
-]
+const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
 const STATUS_COLORS = {
   "waiting": "bg-yellow-400",
   "in-progress": "bg-cyan-400",
   "completed": "bg-green-400",
 };
+
+const DEPARTMENTS = [
+  "Emergency", "Radiology", "Pediatrics", "Cardiology"
+];
 
 function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
@@ -54,32 +54,59 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
   );
 }
 
+function getTodayLocalISO() {
+  return new Date().toLocaleDateString("en-CA");
+}
+
 export default function StaffDashboard() {
   const navigate = useNavigate();
+  const today = getTodayLocalISO();
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedDate, setSelectedDate] = useState("2025-10-17"); // placeholder
-  const [queue, setQueue] = useState(MOCK_QUEUE);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const stored = localStorage.getItem(STORAGE_KEY_DATE);
+    if (stored && /^\d{4}-\d{2}-\d{2}$/.test(stored)) {
+      return stored;
+    }
+    return today;
+  });
+  const [department, setDepartment] = useState("Emergency");
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const filteredQueue = useMemo(() => {
+    if (!selectedDate) return queue;
+
+    return queue.filter((item) => {
+      if (!item.checkinTime) return true;
+
+      const itemDate = item.checkinTime.slice(0, 10);
+      return itemDate === selectedDate;
+    });
+  }, [queue, selectedDate]);
 
   const waiting = useMemo(
-    () => queue.filter((q) => q.status === "waiting"),
-    [queue]
+    () => filteredQueue.filter((q) => q.status === "waiting"),
+    [filteredQueue]
   );
 
   const inProgress = useMemo(
-    () => queue.filter((q) => q.status === "in-progress"),
-    [queue]
+    () => filteredQueue.filter((q) => q.status === "in-progress"),
+    [filteredQueue]
   );
 
   const completed = useMemo(
-    () => queue.filter((q) => q.status === "completed"),
-    [queue]
+    () => filteredQueue.filter((q) => q.status === "completed"),
+    [filteredQueue]
   );
 
   const showSection = (section) =>
     statusFilter === "all" || statusFilter === section;
 
   function handleViewDetails(item) {
-    navigate(`/patient-details/${item.id}`);
+    navigate(`/patient-details/${item.visitId}`, {
+      state: { patient: item, fromDate: selectedDate, fromDepartment: department },
+    });
   }
 
   function handleAction(item, label) {
@@ -104,6 +131,44 @@ export default function StaffDashboard() {
       })
     );
   }
+
+  useEffect(() => {
+    async function loadQueue() {
+      try {
+        setLoading(true);
+        setError("");
+        localStorage.setItem(STORAGE_KEY_DATE, selectedDate);
+
+        const data = await apiRequest(`/queue?department=${encodeURIComponent(department)}`);
+
+        const items = (data.queue || []).map((entry, index) => ({
+          id: entry.visit_id || index,
+          status: entry.status || "waiting",
+          name: entry.name && entry.name.trim().length > 0 ? entry.name : entry.anon_token ? `Patient ${entry.anon_token.slice(-4)}` : "Patient",
+          dept: data.department || department,
+          eta: entry.predicted_wait_minutes != null ? `${entry.predicted_wait_minutes} minutes` : "-",
+          visitId: entry.visit_id,
+          anonToken: entry.anon_token,
+          checkinTime: entry.checkin_time,
+          severity: entry.severity,
+          dob: entry.dob,
+          phone: entry.phone,
+          symptoms: entry.symptoms,
+        }));
+
+        setQueue(items);
+      } catch (err) {
+        console.error(err);
+        setError(err.message || "Error loading queue.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadQueue();
+    const id = setInterval(loadQueue, 30000);
+    return () => clearInterval(id);
+  }, [department, selectedDate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
@@ -136,6 +201,19 @@ export default function StaffDashboard() {
             <button className="ml-auto px-4 py-2 rounded-xl bg-medqPink/80 text-[12px] font-semibold shadow" >
               Filter
             </button>
+
+            {/* Department select */}
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="ml-auto rounded-full bg-[#2D3047] border-slate-600/70 px-4 py-2 text-xs"
+            >
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
 
             <select
               value={statusFilter}
