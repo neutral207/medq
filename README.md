@@ -8,7 +8,7 @@ is a real-time patient flow and queue management system designed to reduce medic
 
 ## Features 
 
-### Core Features 
+### MVP Features 
 - **Patient Check in Interface** - simple and intuitive system for patients to register their arrival. 
 - **Queue Visualization Panel** – Real-time view of all patients in queue.  
 - **Average Wait Time Display** – Displays estimated waiting time for each patient.  
@@ -88,7 +88,6 @@ This project is licensed under the **MIT License** – free for modification and
 ## Contributors
 - ** Chad Gibson** - Mentor/instructor
 - **Joel Simpson** – Project Lead, Backend Developer  
-- **Amy Darr** -  UI and dashboard design  
 - **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
 deployment 
 - **Cheyenne McManhan** - - Machine Learning Engineer – Prediction model creation and maintenance  
