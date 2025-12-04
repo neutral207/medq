@@ -3,6 +3,8 @@ from src.app.errors import ApiError
 import joblib
 import pandas as pd
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 api_bp = Blueprint("api", __name__)
 
@@ -11,15 +13,58 @@ def get_queue():
     return jsonify(department="ER", queue=[])
 
 @api_bp.post("/checkin")
-def check_in():
-    if not request.is_json:
-        raise ApiError("Content-Type must be application/json", code=415)
-    data = request.get_json(silent=True) or {}
-    if "department" not in data:
-        raise ApiError("Missing field: department", code=422)
-    return jsonify(message="checked in", data=data), 201
+def checkin():
+    data = request.get_json()
 
-# Load model at startup
+    if not data or "name" not in data:
+        return jsonify(error="Missing required fields"), 400
+
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        # 1. Create patient
+        cur.execute("""
+            INSERT INTO patients (anon_token, severity, symptoms, source)
+            VALUES (gen_random_uuid()::text, %s, %s, 'kiosk')
+            RETURNING patient_id, anon_token;
+        """, (
+            data.get("severity", 3),
+            data.get("symptoms", None)
+        ))
+
+        patient = cur.fetchone()
+
+        # 2. Assign to a default department (Emergency = 1 or create if empty)
+        dept_id = 1  
+
+        # 3. Insert visit record
+        cur.execute("""
+            INSERT INTO visits (patient_id, dept_id, status)
+            VALUES (%s, %s, 'queued')
+            RETURNING visit_id;
+        """, (patient["patient_id"], dept_id))
+
+        visit = cur.fetchone()
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "visit_id": visit["visit_id"],
+            "patient_id": patient["patient_id"],
+            "anon_token": patient["anon_token"],
+            "message": "Patient successfully checked in."
+        }), 201
+
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+# -----------------------------
+# MODEL LOADING
+# -----------------------------
+
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "wait_time_model.pkl")
 MODEL_PATH = os.path.abspath(MODEL_PATH)
 
@@ -30,6 +75,23 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
+
+# -----------------------------
+# DB CONNECTION HELPER
+# -----------------------------
+
+def get_db_conn():
+    db_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@localhost:5432/medq"
+    )
+    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+
+# -----------------------------
+# WAIT TIME PREDICTION ENDPOINT
+# -----------------------------
+
 @api_bp.route("/predict_wait", methods=["POST"])
 def predict_wait():
     if model is None:
@@ -37,14 +99,12 @@ def predict_wait():
 
     data = request.get_json()
 
-    # Required fields for prediction
     required = ["severity", "hour_of_day", "queue_length", "staff_in_service"]
+    missing = [f for f in required if f not in data]
 
-    missing = [field for field in required if field not in data]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
 
-    # Convert single JSON input to DataFrame
     df = pd.DataFrame([{
         "severity": data["severity"],
         "hour_of_day": data["hour_of_day"],
@@ -57,6 +117,133 @@ def predict_wait():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "predicted_wait_minutes": round(float(prediction), 2)
-    })
+    return jsonify({"predicted_wait_minutes": round(float(prediction), 2)})
+
+
+# -----------------------------
+# NEW SUMMARY ENDPOINT
+# -----------------------------
+
+@api_bp.get("/summary")
+def summary():
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        # 1. Queue count
+        cur.execute("""
+            SELECT COUNT(*) AS queue_count
+            FROM visits
+            WHERE status = 'queued';
+        """)
+        queue_count = cur.fetchone()["queue_count"]
+
+        # 2. Average completed wait time today
+        cur.execute("""
+            SELECT AVG(actual_wait_minutes) AS avg_wait
+            FROM visits
+            WHERE status = 'completed'
+              AND checkin_time::date = CURRENT_DATE;
+        """)
+        row = cur.fetchone()
+        avg_wait = row["avg_wait"] or 0
+
+        # 3. Staff currently in service
+        cur.execute("""
+            SELECT COUNT(DISTINCT assigned_staff) AS active_staff
+            FROM visits
+            WHERE status = 'in_service'
+              AND assigned_staff IS NOT NULL;
+        """)
+        active_staff = cur.fetchone()["active_staff"]
+
+        # 4. Hourly history for charts
+        cur.execute("""
+            SELECT bucket_start, arrivals, avg_wait_minutes, in_service
+            FROM wait_time_agg_hourly
+            ORDER BY bucket_start DESC
+            LIMIT 6;
+        """)
+        rows = list(reversed(cur.fetchall()))
+
+        queue_history = [r["arrivals"] for r in rows]
+        avg_wait_history = [r["avg_wait_minutes"] for r in rows]
+        staff_load_history = [r["in_service"] for r in rows]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "queueCount": queue_count,
+            "averageWait": round(float(avg_wait), 2),
+            "activeStaff": active_staff,
+            "queueHistory": queue_history,
+            "averageWaitHistory": avg_wait_history,
+            "staffLoadHistory": staff_load_history,
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api_bp.get("/wait_heatmap")
+def wait_heatmap():
+    """
+    Returns average wait time in minutes grouped by day of week and hour of day,
+    using the wait_time_agg_hourly table instead of visits.
+    """
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        # Use bucket_start from your aggregate table
+        cur.execute("""
+            SELECT
+                EXTRACT(DOW FROM bucket_start) AS day_of_week,
+                EXTRACT(HOUR FROM bucket_start) AS hour,
+                AVG(avg_wait_minutes) AS avg_wait
+            FROM wait_time_agg_hourly
+            GROUP BY day_of_week, hour
+            ORDER BY day_of_week, hour;
+        """)
+
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # If there is no data yet, return a synthetic grid so the heatmap still draws
+        if not rows:
+            synthetic = [
+                {
+                    "day_of_week": d,
+                    "hour": h,
+                    "avg_wait": ((d * 7 + h * 2) % 50) + 5
+                }
+                for d in range(7)
+                for h in range(24)
+            ]
+            return jsonify(synthetic)
+
+        return jsonify([
+            {
+                "day_of_week": int(r["day_of_week"]),
+                "hour": int(r["hour"]),
+                "avg_wait": float(r["avg_wait"]),
+            }
+            for r in rows
+        ])
+
+    except psycopg2.errors.UndefinedTable:
+        # wait_time_agg_hourly does not exist yet -> return synthetic data
+        synthetic = [
+            {
+                "day_of_week": d,
+                "hour": h,
+                "avg_wait": ((d * 7 + h * 2) % 50) + 5
+            }
+            for d in range(7)
+            for h in range(24)
+        ]
+        return jsonify(synthetic), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
