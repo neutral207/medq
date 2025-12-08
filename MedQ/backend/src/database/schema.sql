@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS visits (
   patient_id UUID REFERENCES patients(patient_id) ON DELETE SET NULL,
   dept_id INT NOT NULL REFERENCES departments(dept_id) ON UPDATE CASCADE,
   assigned_staff INT REFERENCES staff(staff_id) ON DELETE SET NULL,
-  status TEXT NOT NULL CHECK (status IN ('queued','in_service','completed','left')) DEFAULT 'queued',
+  status TEXT NOT NULL CHECK (status IN ('waiting','in-progress','completed','left')) DEFAULT 'waiting',
   checkin_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   service_start TIMESTAMPTZ,
   service_end TIMESTAMPTZ,

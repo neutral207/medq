@@ -14,6 +14,20 @@ const DEPARTMENTS = [
   "Emergency", "Radiology", "Pediatrics", "Cardiology"
 ];
 
+function getNextStatus(currentStatus, label) {
+  if (currentStatus === "waiting") {
+    if (label === "Assign") return "in-progress";
+    if (label === "Conclude") return "completed";
+  } else if (currentStatus === "in-progress") {
+    if (label === "Wait") return "waiting";
+    if (label === "Conclude") return "completed";
+  } else if (currentStatus === "completed") {
+    if (label === "Wait") return "waiting";
+    if (label === "Assign") return "in-progress";
+  }
+  return currentStatus;
+}
+
 function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
 
@@ -80,7 +94,7 @@ export default function StaffDashboard() {
     return queue.filter((item) => {
       if (!item.checkinTime) return true;
 
-      const itemDate = item.checkinTime.slice(0, 10);
+      const itemDate = new Date(item.checkinTime).toLocaleDateString("en-CA");
       return itemDate === selectedDate;
     });
   }, [queue, selectedDate]);
@@ -109,27 +123,33 @@ export default function StaffDashboard() {
     });
   }
 
-  function handleAction(item, label) {
-    setQueue((prev) =>
-      prev.map((q) => {
-        if (q.id !== item.id) return q;
+  async function handleAction(item, label) {
+    const nextStatus = getNextStatus(item.status, label);
+    if (nextStatus === item.status) return;
 
-        let nextStatus = q.status;
+    const previousStatus = item.status;
 
-        if (q.status === "waiting") {
-          if (label === "Assign") nextStatus = "in-progress";
-          if (label === "Conclude") nextStatus = "completed";
-        } else if (q.status === "in-progress") {
-          if (label === "Wait") nextStatus = "waiting";
-          if (label === "Conclude") nextStatus = "completed";
-        } else if (q.status === "completed") {
-          if (label === "Wait") nextStatus = "waiting";
-          if (label === "Assign") nextStatus = "in-progress";
-        }
-
-        return {...q, status: nextStatus };
-      })
+    setQueue((prev) => 
+      prev.map((q) =>
+        q.id === item.id ? { ...q, status: nextStatus } : q
+      )
     );
+
+    try {
+      await apiRequest(`/visit/${encodeURIComponent(item.visitId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+    } catch (err) {
+      console.error(err);
+      setError("Error updating status.");
+
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === item.id ? { ...q, status: previousStatus } : q
+        )
+      );
+    }
   }
 
   useEffect(() => {

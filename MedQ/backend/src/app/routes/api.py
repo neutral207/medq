@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from src.app.errors import ApiError
 import joblib
 import pandas as pd
-import os
+from datetime import datetime, timezone
 
 api_bp = Blueprint("api", __name__)
 
@@ -26,6 +26,7 @@ def get_queue():
             cur.execute(
                 """
                 SELECT v.visit_id,
+                    v.status,
                     p.anon_token,
                     p.severity,
                     p.full_name,
@@ -38,7 +39,7 @@ def get_queue():
                 JOIN patients p ON p.patient_id = v.patient_id
                 JOIN departments d ON d.dept_id = v.dept_id
                 WHERE d.name = %s
-                    AND v.status = 'queued'
+                    AND v.status <> 'left'
                 ORDER BY v.checkin_time ASC;
                 """,
                 (department_name,),
@@ -47,6 +48,7 @@ def get_queue():
     queue = [
         {
             "visit_id": str(row["visit_id"]),
+            "status": row["status"],
             "anon_token": row["anon_token"],
             "severity": row["severity"],
             "name": row["full_name"],
@@ -107,7 +109,7 @@ def check_in():
                 INSERT INTO visits (
                     patient_id, dept_id, status, predicted_wait_minutes
                 )
-                VALUES (%s, %s, 'queued', %s)
+                VALUES (%s, %s, 'waiting', %s)
                 RETURNING visit_id, checkin_time, predicted_wait_minutes, status;
                 """,
                 (patient_row["patient_id"], dept_id, 30),
@@ -189,6 +191,79 @@ def get_visit(visit_id):
     }
 
     return jsonify({ "visit": visit })
+
+@api_bp.patch("/visit/<visit_id>/status")
+def update_visit_status(visit_id):
+    if not request.is_json:
+        raise ApiError("Content-Type must be application/json", code=415)
+    
+    data = request.get_json(silent=True) or {}
+    new_status = data.get("status")
+
+    if new_status not in ("waiting", "in-progress", "completed", "left"):
+        raise ApiError("Invalid status value", code=400)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    status,
+                    service_start
+                FROM visits
+                WHERE visit_id = %s;
+                """,
+                (visit_id,),
+            )
+            current = cur.fetchone()
+            if not current:
+                raise ApiError(f"Visit not found: {visit_id}", code=404)
+
+            now = datetime.now(timezone.utc)
+
+            updates = { "status": new_status }
+
+            # If we go back to waiting, clear timers (nurse wasn't ready / patient sent back)
+            if new_status == "waiting":
+                updates["service_start"] = None
+                updates["service_end"] = None
+
+            # When moving into in-progress, start service clock (if not already started)
+            elif new_status == "in-progress" and current["service_start"] is None:
+                updates["service_start"] = now
+            
+            # When moving into completed, end service
+            elif new_status == "completed":
+                # If service_start was never set, set it now
+                if current["service_start"] is None:
+                    updates["service_start"] = now
+                updates["service_end"] = now
+
+            set_clauses = []
+            params = []
+            for col, val in updates.items():
+                set_clauses.append(f"{col} = %s")
+                params.append(val)
+            params.append(visit_id)
+
+            cur.execute(
+                f"""
+                UPDATE visits
+                SET {', '.join(set_clauses)}
+                WHERE visit_id = %s
+                RETURNING visit_id, status, service_start, service_end;
+                """,
+                params,
+            )
+            row = cur.fetchone()
+            conn.commit()
+
+    return jsonify({
+        "visit_id": str(row["visit_id"]),
+        "status": row["status"],
+        "service_start": row["service_start"].isoformat() if row["service_start"] else None,
+        "service_end": row["service_end"].isoformat() if row["service_end"] else None,
+    }), 200                
 
 # Load model at startup
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "wait_time_model.pkl")

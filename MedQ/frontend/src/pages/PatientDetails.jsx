@@ -35,6 +35,8 @@ export default function PatientDetails() {
   const [visit, setVisit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     async function loadVisit() {
@@ -70,6 +72,28 @@ export default function PatientDetails() {
       navigate(-1);
     }
   };
+
+  async function updateStatus(newStatus) {
+    if (!visit || visit.status === newStatus) return;
+    setStatusError("");
+    setUpdatingStatus(true);
+
+    const previousStatus = visit.status;
+    setVisit((prev) => ({ ...prev, status: newStatus }));
+
+    try {
+      await apiRequest(`/visit/${encodeURIComponent(id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus }),
+      });
+    } catch (err) {
+      console.error(err);
+      setStatusError(err.message || "Error updating status.");
+      setVisit((prev) => ({ ...prev, status: previousStatus }));
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -107,7 +131,7 @@ export default function PatientDetails() {
 
   const triage = getTriageLabel(visit.severity);
   const dob = formatDate(visit.dob);
-  const arrival = formatDateTime(visit.checkin_time);
+  const checkin_time = formatDateTime(visit.checkin_time);
   const serviceStart = formatDateTime(visit.service_start);
   const serviceEnd = formatDateTime(visit.service_end);
 
@@ -123,6 +147,12 @@ export default function PatientDetails() {
         </button>
 
         <h1 className="text-3xl font-bold mb-6">Patient Information</h1>
+        <p className="text-xs text-slate-300 mb-6">
+          Status: {" "}
+          <span className="font-semibold">
+            {visit.status?.replace("-", " ") || "N/A"}
+          </span>
+        </p>
 
         {/* Patient Info */}
         <section className="space-y-4 text-sm leading-relaxed">
@@ -154,7 +184,7 @@ export default function PatientDetails() {
 
           <div>
             <p className="font-semibold">Time Metrics</p>
-            <p>Arrival Time: {arrival}</p>
+            <p>Check-In Time: {checkin_time}</p>
             <p>Service Start: {serviceStart}</p>
             <p>Service End: {serviceEnd}</p>
           </div>
