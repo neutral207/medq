@@ -5,12 +5,23 @@ import pandas as pd
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from datetime import datetime
 
 api_bp = Blueprint("api", __name__)
 
 @api_bp.get("/queue")
 def get_queue():
     return jsonify(department="ER", queue=[])
+
+def parse_date_param(name: str):
+    
+    value = request.args.get(name)
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
 
 @api_bp.post("/checkin")
 def checkin():
@@ -187,10 +198,8 @@ def summary():
 
 @api_bp.get("/wait_heatmap")
 def wait_heatmap():
-    """
-    Returns average wait time in minutes grouped by day of week and hour of day,
-    using the wait_time_agg_hourly table instead of visits.
-    """
+    start_date = parse_date_param("start")
+    end_date = parse_date_param("end")
     try:
         conn = get_db_conn()
         cur = conn.cursor()
@@ -247,3 +256,80 @@ def wait_heatmap():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+DEPT_CAPACITY = {
+    1: 10,  # Emergency
+    2: 8,   # Radiology
+    3: 6,   # Pediatrics
+}
+
+
+@api_bp.get("/staff_utilization")
+def staff_utilization():
+    
+    empty_payload = {"byDept": [], "history": []}
+    start_date = parse_date_param("start")
+    end_date = parse_date_param("end")
+
+    try:
+        try:
+            conn = get_db_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT bucket_start, dept_id, COALESCE(in_service, 0) AS in_service
+                FROM wait_time_agg_hourly
+                ORDER BY bucket_start DESC
+                LIMIT 24;
+            """)
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+        except Exception:
+            rows = []
+
+        if not rows:
+            return jsonify(empty_payload), 200
+
+        latest_by_dept = {}
+        for r in rows:
+            did = r["dept_id"]
+            if did not in latest_by_dept or r["bucket_start"] > latest_by_dept[did]["bucket_start"]:
+                latest_by_dept[did] = r
+
+        by_dept_payload = []
+        for did, latest in latest_by_dept.items():
+            in_serv = latest["in_service"] or 0
+            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))  
+            util = float(in_serv) / capacity if capacity else 0.0
+
+            by_dept_payload.append({
+                "deptId": did,
+                "deptName": f"Dept {did}",
+                "activeStaff": capacity,
+                "inService": int(in_serv),
+                "utilization": round(util, 2),
+            })
+
+        history_payload = []
+        for r in rows:
+            did = r["dept_id"]
+            in_serv = r["in_service"] or 0
+            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))
+            util = float(in_serv) / capacity if capacity else 0.0
+
+            bucket_start = r["bucket_start"]
+            if hasattr(bucket_start, "isoformat"):
+                bucket_start = bucket_start.isoformat()
+
+            history_payload.append({
+                "bucketStart": bucket_start,
+                "deptId": did,
+                "inService": int(in_serv),
+                "activeStaff": capacity,
+                "utilization": round(util, 2),
+            })
+
+        return jsonify({"byDept": by_dept_payload, "history": history_payload}), 200
+
+    except Exception:
+        return jsonify(empty_payload), 200
