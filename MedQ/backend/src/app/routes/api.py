@@ -1,3 +1,6 @@
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
 from src.app.errors import ApiError
 import joblib
@@ -9,9 +12,56 @@ from datetime import datetime
 
 api_bp = Blueprint("api", __name__)
 
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/medq",
+)
+
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
 @api_bp.get("/queue")
 def get_queue():
-    return jsonify(department="ER", queue=[])
+    department_name = request.args.get("department", "Emergency")
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT v.visit_id,
+                    p.anon_token,
+                    p.severity,
+                    p.full_name,
+                    p.dob,
+                    p.phone,
+                    p.symptoms,
+                    v.checkin_time,
+                    v.predicted_wait_minutes
+                FROM visits v
+                JOIN patients p ON p.patient_id = v.patient_id
+                JOIN departments d ON d.dept_id = v.dept_id
+                WHERE d.name = %s
+                    AND v.status = 'queued'
+                ORDER BY v.checkin_time ASC;
+                """,
+                (department_name,),
+            )
+            rows = cur.fetchall()
+    queue = [
+        {
+            "visit_id": str(row["visit_id"]),
+            "anon_token": row["anon_token"],
+            "severity": row["severity"],
+            "name": row["full_name"],
+            "dob": row["dob"].isoformat() if row["dob"] else None,
+            "phone": row["phone"],
+            "symptoms": row["symptoms"],
+            "checkin_time": row["checkin_time"].isoformat() if row["checkin_time"] else None,
+            "predicted_wait_minutes": row["predicted_wait_minutes"],
+        }
+        for row in rows
+    ]
+    return jsonify({"department": department_name, "queue": queue})
 
 def parse_date_param(name: str):
     
