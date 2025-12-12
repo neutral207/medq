@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { apiRequest } from "../apiClient";
+import TabSwitcher from "../components/TabSwitcher";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -74,7 +75,10 @@ function getTodayLocalISO() {
 
 export default function StaffDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const today = getTodayLocalISO();
+  const isBoard = location.pathname === "/staff-dashboard";
+  const isAnalytics = location.pathname === "/staff-analytics";
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY_DATE);
@@ -122,6 +126,14 @@ export default function StaffDashboard() {
       state: { patient: item, fromDate: selectedDate, fromDepartment: department },
     });
   }
+
+  const handleTabClick = (route) => {
+    if (location.pathname === route) {
+      window.location.reload();
+    } else {
+      navigate(route);
+    }
+  };
 
   async function handleAction(item, label) {
     const nextStatus = getNextStatus(item.status, label);
@@ -202,12 +214,14 @@ export default function StaffDashboard() {
         </header>
 
         {/* Row 1: Board / Analytics */}
-        <div className="mb-4">
-          <button className="px-5 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md">
-            Board
-          </button>
-        </div>
-
+        <TabSwitcher
+          className="mb-4"
+          tabs={[
+            { label: "Board", to: "/staff-dashboard" },
+            { label: "Analytics", to: "/staff-analytics" },
+          ]}
+        />
+        
         {/* Row 1: Date + Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <input
