@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { apiRequest } from "../apiClient";
+import TabSwitcher from "../components/TabSwitcher";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -13,6 +14,20 @@ const STATUS_COLORS = {
 const DEPARTMENTS = [
   "Emergency", "Radiology", "Pediatrics", "Cardiology"
 ];
+
+function getNextStatus(currentStatus, label) {
+  if (currentStatus === "waiting") {
+    if (label === "Assign") return "in-progress";
+    if (label === "Conclude") return "completed";
+  } else if (currentStatus === "in-progress") {
+    if (label === "Wait") return "waiting";
+    if (label === "Conclude") return "completed";
+  } else if (currentStatus === "completed") {
+    if (label === "Wait") return "waiting";
+    if (label === "Assign") return "in-progress";
+  }
+  return currentStatus;
+}
 
 function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
@@ -60,7 +75,10 @@ function getTodayLocalISO() {
 
 export default function StaffDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const today = getTodayLocalISO();
+  const isBoard = location.pathname === "/staff-dashboard";
+  const isAnalytics = location.pathname === "/staff-analytics";
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState(() => {
     const stored = localStorage.getItem(STORAGE_KEY_DATE);
@@ -80,7 +98,7 @@ export default function StaffDashboard() {
     return queue.filter((item) => {
       if (!item.checkinTime) return true;
 
-      const itemDate = item.checkinTime.slice(0, 10);
+      const itemDate = new Date(item.checkinTime).toLocaleDateString("en-CA");
       return itemDate === selectedDate;
     });
   }, [queue, selectedDate]);
@@ -109,27 +127,41 @@ export default function StaffDashboard() {
     });
   }
 
-  function handleAction(item, label) {
-    setQueue((prev) =>
-      prev.map((q) => {
-        if (q.id !== item.id) return q;
+  const handleTabClick = (route) => {
+    if (location.pathname === route) {
+      window.location.reload();
+    } else {
+      navigate(route);
+    }
+  };
 
-        let nextStatus = q.status;
+  async function handleAction(item, label) {
+    const nextStatus = getNextStatus(item.status, label);
+    if (nextStatus === item.status) return;
 
-        if (q.status === "waiting") {
-          if (label === "Assign") nextStatus = "in-progress";
-          if (label === "Conclude") nextStatus = "completed";
-        } else if (q.status === "in-progress") {
-          if (label === "Wait") nextStatus = "waiting";
-          if (label === "Conclude") nextStatus = "completed";
-        } else if (q.status === "completed") {
-          if (label === "Wait") nextStatus = "waiting";
-          if (label === "Assign") nextStatus = "in-progress";
-        }
+    const previousStatus = item.status;
 
-        return {...q, status: nextStatus };
-      })
+    setQueue((prev) => 
+      prev.map((q) =>
+        q.id === item.id ? { ...q, status: nextStatus } : q
+      )
     );
+
+    try {
+      await apiRequest(`/visit/${encodeURIComponent(item.visitId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+    } catch (err) {
+      console.error(err);
+      setError("Error updating status.");
+
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === item.id ? { ...q, status: previousStatus } : q
+        )
+      );
+    }
   }
 
   useEffect(() => {
@@ -182,12 +214,14 @@ export default function StaffDashboard() {
         </header>
 
         {/* Row 1: Board / Analytics */}
-        <div className="mb-4">
-          <button className="px-5 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md">
-            Board
-          </button>
-        </div>
-
+        <TabSwitcher
+          className="mb-4"
+          tabs={[
+            { label: "Board", to: "/staff-dashboard" },
+            { label: "Analytics", to: "/staff-analytics" },
+          ]}
+        />
+        
         {/* Row 1: Date + Filters */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <input
