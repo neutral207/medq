@@ -62,6 +62,16 @@ def get_queue():
     ]
     return jsonify({"department": department_name, "queue": queue})
 
+def parse_date_param(name: str):
+    
+    value = request.args.get(name)
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
+
 @api_bp.post("/checkin")
 def check_in():
     if not request.is_json:
@@ -136,7 +146,7 @@ def check_in():
 
     # TODO: write to database
     return jsonify({"message": "checked in", "visit": visit}), 201
-
+  
 @api_bp.get("/visit/<visit_id>")
 def get_visit(visit_id):
     with get_conn() as conn:
@@ -191,7 +201,7 @@ def get_visit(visit_id):
     }
 
     return jsonify({ "visit": visit })
-
+  
 @api_bp.patch("/visit/<visit_id>/status")
 def update_visit_status(visit_id):
     if not request.is_json:
@@ -263,9 +273,12 @@ def update_visit_status(visit_id):
         "status": row["status"],
         "service_start": row["service_start"].isoformat() if row["service_start"] else None,
         "service_end": row["service_end"].isoformat() if row["service_end"] else None,
-    }), 200                
+    }), 200
+  
+# -----------------------------
+# MODEL LOADING
+# -----------------------------
 
-# Load model at startup
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "wait_time_model.pkl")
 MODEL_PATH = os.path.abspath(MODEL_PATH)
 
@@ -276,6 +289,23 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
+
+# -----------------------------
+# DB CONNECTION HELPER
+# -----------------------------
+
+def get_db_conn():
+    db_url = os.environ.get(
+        "DATABASE_URL",
+        "postgresql://postgres:postgres@localhost:5432/medq"
+    )
+    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+
+# -----------------------------
+# WAIT TIME PREDICTION ENDPOINT
+# -----------------------------
+
 @api_bp.route("/predict_wait", methods=["POST"])
 def predict_wait():
     if model is None:
@@ -283,14 +313,12 @@ def predict_wait():
 
     data = request.get_json()
 
-    # Required fields for prediction
     required = ["severity", "hour_of_day", "queue_length", "staff_in_service"]
+    missing = [f for f in required if f not in data]
 
-    missing = [field for field in required if field not in data]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
 
-    # Convert single JSON input to DataFrame
     df = pd.DataFrame([{
         "severity": data["severity"],
         "hour_of_day": data["hour_of_day"],
@@ -303,6 +331,208 @@ def predict_wait():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    return jsonify({
-        "predicted_wait_minutes": round(float(prediction), 2)
-    })
+    return jsonify({"predicted_wait_minutes": round(float(prediction), 2)})
+
+
+# -----------------------------
+# NEW SUMMARY ENDPOINT
+# -----------------------------
+
+@api_bp.get("/summary")
+def summary():
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        # 1. Queue count
+        cur.execute("""
+            SELECT COUNT(*) AS queue_count
+            FROM visits
+            WHERE status = 'queued';
+        """)
+        queue_count = cur.fetchone()["queue_count"]
+
+        # 2. Average completed wait time today
+        cur.execute("""
+            SELECT AVG(actual_wait_minutes) AS avg_wait
+            FROM visits
+            WHERE status = 'completed'
+              AND checkin_time::date = CURRENT_DATE;
+        """)
+        row = cur.fetchone()
+        avg_wait = row["avg_wait"] or 0
+
+        # 3. Staff currently in service
+        cur.execute("""
+            SELECT COUNT(DISTINCT assigned_staff) AS active_staff
+            FROM visits
+            WHERE status = 'in_service'
+              AND assigned_staff IS NOT NULL;
+        """)
+        active_staff = cur.fetchone()["active_staff"]
+
+        # 4. Hourly history for charts
+        cur.execute("""
+            SELECT bucket_start, arrivals, avg_wait_minutes, in_service
+            FROM wait_time_agg_hourly
+            ORDER BY bucket_start DESC
+            LIMIT 6;
+        """)
+        rows = list(reversed(cur.fetchall()))
+
+        queue_history = [r["arrivals"] for r in rows]
+        avg_wait_history = [r["avg_wait_minutes"] for r in rows]
+        staff_load_history = [r["in_service"] for r in rows]
+
+        cur.close()
+        conn.close()
+
+        return jsonify({
+            "queueCount": queue_count,
+            "averageWait": round(float(avg_wait), 2),
+            "activeStaff": active_staff,
+            "queueHistory": queue_history,
+            "averageWaitHistory": avg_wait_history,
+            "staffLoadHistory": staff_load_history,
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@api_bp.get("/wait_heatmap")
+def wait_heatmap():
+    start_date = parse_date_param("start")
+    end_date = parse_date_param("end")
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+
+        # Use bucket_start from your aggregate table
+        cur.execute("""
+            SELECT
+                EXTRACT(DOW FROM bucket_start) AS day_of_week,
+                EXTRACT(HOUR FROM bucket_start) AS hour,
+                AVG(avg_wait_minutes) AS avg_wait
+            FROM wait_time_agg_hourly
+            GROUP BY day_of_week, hour
+            ORDER BY day_of_week, hour;
+        """)
+
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # If there is no data yet, return a synthetic grid so the heatmap still draws
+        if not rows:
+            synthetic = [
+                {
+                    "day_of_week": d,
+                    "hour": h,
+                    "avg_wait": ((d * 7 + h * 2) % 50) + 5
+                }
+                for d in range(7)
+                for h in range(24)
+            ]
+            return jsonify(synthetic)
+
+        return jsonify([
+            {
+                "day_of_week": int(r["day_of_week"]),
+                "hour": int(r["hour"]),
+                "avg_wait": float(r["avg_wait"]),
+            }
+            for r in rows
+        ])
+
+    except psycopg2.errors.UndefinedTable:
+        # wait_time_agg_hourly does not exist yet -> return synthetic data
+        synthetic = [
+            {
+                "day_of_week": d,
+                "hour": h,
+                "avg_wait": ((d * 7 + h * 2) % 50) + 5
+            }
+            for d in range(7)
+            for h in range(24)
+        ]
+        return jsonify(synthetic), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+DEPT_CAPACITY = {
+    1: 10,  # Emergency
+    2: 8,   # Radiology
+    3: 6,   # Pediatrics
+}
+
+
+@api_bp.get("/staff_utilization")
+def staff_utilization():
+    
+    empty_payload = {"byDept": [], "history": []}
+    start_date = parse_date_param("start")
+    end_date = parse_date_param("end")
+
+    try:
+        try:
+            conn = get_db_conn()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT bucket_start, dept_id, COALESCE(in_service, 0) AS in_service
+                FROM wait_time_agg_hourly
+                ORDER BY bucket_start DESC
+                LIMIT 24;
+            """)
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+        except Exception:
+            rows = []
+
+        if not rows:
+            return jsonify(empty_payload), 200
+
+        latest_by_dept = {}
+        for r in rows:
+            did = r["dept_id"]
+            if did not in latest_by_dept or r["bucket_start"] > latest_by_dept[did]["bucket_start"]:
+                latest_by_dept[did] = r
+
+        by_dept_payload = []
+        for did, latest in latest_by_dept.items():
+            in_serv = latest["in_service"] or 0
+            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))  
+            util = float(in_serv) / capacity if capacity else 0.0
+
+            by_dept_payload.append({
+                "deptId": did,
+                "deptName": f"Dept {did}",
+                "activeStaff": capacity,
+                "inService": int(in_serv),
+                "utilization": round(util, 2),
+            })
+
+        history_payload = []
+        for r in rows:
+            did = r["dept_id"]
+            in_serv = r["in_service"] or 0
+            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))
+            util = float(in_serv) / capacity if capacity else 0.0
+
+            bucket_start = r["bucket_start"]
+            if hasattr(bucket_start, "isoformat"):
+                bucket_start = bucket_start.isoformat()
+
+            history_payload.append({
+                "bucketStart": bucket_start,
+                "deptId": did,
+                "inService": int(in_serv),
+                "activeStaff": capacity,
+                "utilization": round(util, 2),
+            })
+
+        return jsonify({"byDept": by_dept_payload, "history": history_payload}), 200
+
+    except Exception:
+        return jsonify(empty_payload), 200
