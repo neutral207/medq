@@ -6,6 +6,7 @@ from src.app.errors import ApiError
 import joblib
 import pandas as pd
 import os
+from datetime import datetime
 
 api_bp = Blueprint("api", __name__)
 
@@ -88,6 +89,30 @@ def check_in():
 
             cur.execute(
                 """
+                SELECT COUNT(*) as queue_length
+                FROM visits v
+                WHERE v.dept_id = %s AND v.status = 'queued';
+                """,
+                (dept_id,),
+            )
+            queue_row = cur.fetchnone()
+            queue_length = queue_row["queue_length"] if queue_row else 0
+
+            cur.execute(
+                """
+                SELECT COUNT(*) as staff_count
+                FROM staff s
+                WHERE s.dept_id = %s AND s.active = TRUE;
+                """,
+                (dept_id,),
+            )
+            staff_row = cur.fetchnone()
+            staff_count = staff_row["staff_count"] if staff_row else 5
+
+            hour_of_day = datetime.now().hour
+            predicted_wait = predict_wait_time_ml(severity, hour_of_day, queue_length, staff_count)
+            cur.execute(
+                """
                 INSERT INTO patients (anon_token, severity, symptoms, source, full_name, dob, phone)
                 VALUES (
                     substr(encode(digest(gen_random_uuid()::text, 'sha1'), 'hex'),1,12),
@@ -110,7 +135,7 @@ def check_in():
                 VALUES (%s, %s, 'queued', %s)
                 RETURNING visit_id, checkin_time, predicted_wait_minutes, status;
                 """,
-                (patient_row["patient_id"], dept_id, 30),
+                (patient_row["patient_id"], dept_id, predicted_wait),
             )
             visit_row = cur.fetchone()
             if visit_row is None:
@@ -131,6 +156,14 @@ def check_in():
         "dob": dob,
         "phone": phone,
     }
+
+    from flask import current_app
+    if hasattr(current_app, 'socketio'):
+        current_app.socketio.emit('queue_update', {
+            'department': department_name,
+            'action': 'patient_added',
+            'visit': visit
+        }, broadcast=True)
 
     # TODO: write to database
     return jsonify({"message": "checked in", "visit": visit}), 201
@@ -201,6 +234,26 @@ except Exception as e:
     print(f"Error loading model: {e}")
     model = None
 
+
+def predict_wait_time_ml(severity, hour_of_day, queue_length, staff_in_service):
+    if model is None:
+        base_times = {1: 45, 2: 30, 3: 20, 4: 10, 5: 5}
+        return base_times.get(severity, 30) + (queue_length * 5)
+    
+    try:
+        df = pd.DataFrame([{
+            "severity": severity,
+            "hour_of_day": hour_of_day,
+            "queue_length": queue_length, 
+            "staff_in_service": staff_in_service
+        }])
+        prediction = model.predict(df)[0]
+        return round(float(prediction), 2)
+    except Exception as e:
+        print(f"Prediction Error: {e}")
+        base_times = {1: 45, 2: 30, 3: 20, 4: 10, 5: 5}
+        return base_times.get(severity, 30) + (queue_length * 5)
+
 @api_bp.route("/predict_wait", methods=["POST"])
 def predict_wait():
     if model is None:
@@ -215,19 +268,65 @@ def predict_wait():
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
 
-    # Convert single JSON input to DataFrame
-    df = pd.DataFrame([{
-        "severity": data["severity"],
-        "hour_of_day": data["hour_of_day"],
-        "queue_length": data["queue_length"],
-        "staff_in_service": data["staff_in_service"]
-    }])
-
-    try:
-        prediction = model.predict(df)[0]
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    predicted_wait = predict_wait_time_ml(
+        data["severity"],
+        data["hour_of_day"],
+        data["queue_length"],
+        data["staff_in_service"]
+    )
 
     return jsonify({
-        "predicted_wait_minutes": round(float(prediction), 2)
+        "predicted_wait_minutes": predicted_wait
+    })
+
+@api_bp.post("/visit/<visit_id>/complete")
+def complete_visit(visit_id):
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # GET VISIT INFORMATION
+            cur.execute(
+                """
+                SELECT v.visit_id, v.checkin_time, v.service_start, v.predicted_wait_minutes,
+                p.severity, d.name as department_name
+                FROM visits v
+                JOIN patients p ON p.patient_id = v.patient_id
+                JOIN departments d ON d.dept.id = v.dept_id
+                WHERE v.visit_id = %s;
+                """,
+                (visit_id,),
+            )
+            visit = cur.fetchone()
+
+            if not visit:
+                raise ApiError(f"Visit not found: {visit_id}", code=404)
+            
+            #CALCULATE WAIT TIME (ACTUAL)
+            service_start = visit["service_start"] or datetime.now()
+            checkin_time = visit["checkin_time"]
+            actual_wait_minutes = int((service_start - checkin_time).total_seconds() / 60)
+
+            cur.execute(
+                """
+                UPDATE visits
+                SET status = 'completed',
+                    service_end = NOW,
+                    actual_wait_minutes = %s
+                WHERE visit_id = %s
+                """,
+                (actual_wait_minutes, visit_id),
+            )
+            conn.commit()
+       
+    from flask import current_app
+    if hasattr(current_app, 'socketio'):
+        current_app.socketio.emit('queue_update', {
+            'department': visit["department_name"],
+            'action': 'patient_completed',
+            'visit_id': str(visit_id)
+        }, broadcast=True)
+        
+    return jsonify({
+        "message": "Visit Completed",
+        "actual_wait_minutes": actual_wait_minutes,
+        "predicted_wait_minutes": visit["predicted_wait_minutes"]
     })
