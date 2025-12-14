@@ -14,6 +14,19 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/medq",
 )
 
+from datetime import datetime
+
+def parse_dob_mmddyyyy(value):
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%m/%d/%Y").date()
+    except ValueError:
+        raise ApiError("dob must be in MM/DD/YYYY format", code=400)
+
 def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
@@ -21,10 +34,29 @@ def get_conn():
 def get_queue():
     department_name = request.args.get("department", "Emergency")
 
+    # Optional: allow date filters
+    start_date = parse_date_param("start")
+    end_date = parse_date_param("end")
+
+    # Default: today only if no filters were provided
+    if not start_date and not end_date:
+        start_date = datetime.now(timezone.utc).date()
+        end_date = start_date
+
+    where_date = ""
+    params = [department_name]
+
+    if start_date:
+        where_date += " AND v.checkin_time::date >= %s"
+        params.append(start_date)
+    if end_date:
+        where_date += " AND v.checkin_time::date <= %s"
+        params.append(end_date)
+
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                """
+                f"""
                 SELECT v.visit_id,
                     v.status,
                     p.anon_token,
@@ -40,11 +72,13 @@ def get_queue():
                 JOIN departments d ON d.dept_id = v.dept_id
                 WHERE d.name = %s
                     AND v.status <> 'left'
+                    {where_date}
                 ORDER BY v.checkin_time ASC;
                 """,
-                (department_name,),
+                tuple(params),
             )
             rows = cur.fetchall()
+
     queue = [
         {
             "visit_id": str(row["visit_id"]),
@@ -60,6 +94,7 @@ def get_queue():
         }
         for row in rows
     ]
+
     return jsonify({"department": department_name, "queue": queue})
 
 def parse_date_param(name: str):
@@ -76,19 +111,67 @@ def parse_date_param(name: str):
 def check_in():
     if not request.is_json:
         raise ApiError("Content-Type must be application/json", code=415)
-    
+
     data = request.get_json(silent=True) or {}
 
     department_name = data.get("department") or "Emergency"
-    symptoms = data.get("symptoms")
+    symptoms = (data.get("symptoms") or "").strip()
     severity = int(data.get("severity") or 3)
     source = data.get("source") or "kiosk"
     full_name = (data.get("name") or "").strip()
     dob = data.get("dob")
     phone = (data.get("phone") or "").strip()
-    
+
+    if not symptoms:
+        raise ApiError("symptoms is required", code=400)
+    if not full_name:
+        raise ApiError("name is required", code=400)
+
+    def get_staff_in_service(conn, dept_id):
+        # fallback if you do not have hourly agg populated yet
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT COALESCE(in_service, 0) AS in_service
+                    FROM wait_time_agg_hourly
+                    WHERE dept_id = %s
+                    ORDER BY bucket_start DESC
+                    LIMIT 1
+                    """,
+                    (dept_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return int(row["in_service"] or 0)
+        except Exception:
+            pass
+        return 3  # default fallback
+
+    def get_queue_length_today(conn, dept_id):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM visits
+                    WHERE dept_id = %s
+                      AND status <> 'left'
+                      AND checkin_time::date = (now() at time zone 'utc')::date
+                    """,
+                    (dept_id,),
+                )
+                return int(cur.fetchone()[0])
+        except Exception:
+            # if visits table is missing or query fails, just treat as empty
+            return 0
+
+    # --------------------------
+    # DB work
+    # --------------------------
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # 1) Resolve department id
             cur.execute(
                 "SELECT dept_id FROM departments WHERE name = %s",
                 (department_name,),
@@ -98,6 +181,7 @@ def check_in():
                 raise ApiError(f"Unknown department: {department_name}", code=400)
             dept_id = dept_row["dept_id"]
 
+            # 2) Insert patient
             cur.execute(
                 """
                 INSERT INTO patients (anon_token, severity, symptoms, source, full_name, dob, phone)
@@ -114,6 +198,29 @@ def check_in():
             if patient_row is None:
                 raise ApiError("Failed to create patient record", code=500)
 
+            # 3) Compute queue position and ML features
+            existing_len = get_queue_length_today(conn, dept_id)
+            queue_position = existing_len + 1
+
+            hour_of_day = datetime.now(timezone.utc).hour
+            staff_in_service = get_staff_in_service(conn, dept_id)
+
+            predicted_wait_minutes = 30  # fallback if model missing
+            if model is not None:
+                # IMPORTANT: keep feature names and order consistent with training
+                df = pd.DataFrame([{
+                    "severity": int(severity),
+                    "hour_of_day": int(hour_of_day),
+                    "queue_length": int(queue_position),
+                    "staff_in_service": int(staff_in_service),
+                }])
+                try:
+                    pred = model.predict(df)[0]
+                    predicted_wait_minutes = int(round(float(pred)))
+                except Exception:
+                    predicted_wait_minutes = 30
+
+            # 4) Insert visit with predicted wait
             cur.execute(
                 """
                 INSERT INTO visits (
@@ -122,29 +229,35 @@ def check_in():
                 VALUES (%s, %s, 'waiting', %s)
                 RETURNING visit_id, checkin_time, predicted_wait_minutes, status;
                 """,
-                (patient_row["patient_id"], dept_id, 30),
+                (patient_row["patient_id"], dept_id, predicted_wait_minutes),
             )
             visit_row = cur.fetchone()
             if visit_row is None:
                 raise ApiError("Failed to create visit record", code=500)
-    
+
+    # --------------------------
+    # Response payload
+    # --------------------------
     visit = {
         "visit_id": str(visit_row["visit_id"]),
         "anon_token": patient_row["anon_token"],
         "severity": severity,
         "symptoms": symptoms,
-        "checkin_time": visit_row["checkin_time"].isoformat()
-        if visit_row["checkin_time"]
-        else None,
+        "checkin_time": visit_row["checkin_time"].isoformat() if visit_row["checkin_time"] else None,
         "predicted_wait_minutes": visit_row["predicted_wait_minutes"],
         "status": visit_row["status"],
         "department": department_name,
         "name": full_name,
         "dob": dob,
         "phone": phone,
+        "queue_position": queue_position,
+        "features_used": {
+            "hour_of_day": hour_of_day,
+            "staff_in_service": staff_in_service,
+            "queue_length": queue_position,
+        },
     }
 
-    # TODO: write to database
     return jsonify({"message": "checked in", "visit": visit}), 201
   
 @api_bp.get("/visit/<visit_id>")

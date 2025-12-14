@@ -5,7 +5,28 @@ INSERT INTO departments (name, triage_rules) VALUES
   ('Emergency', '{}'::jsonb),
   ('Radiology', '{}'::jsonb),
   ('Pediatrics', '{}'::jsonb),
-  ('Cardiology', '{}'::jsonb)
+  ('Cardiology', '{}'::jsonb),
+  ('Urgent Care', '{}'::jsonb),
+  ('General Medicine', '{}'::jsonb),
+  ('Orthopedics', '{}'::jsonb),
+  ('Neurology', '{}'::jsonb),
+  ('Oncology', '{}'::jsonb),
+  ('OBGYN', '{}'::jsonb),
+  ('Surgery', '{}'::jsonb),
+  ('ICU', '{}'::jsonb),
+  ('Laboratory', '{}'::jsonb),
+  ('Pharmacy', '{}'::jsonb),
+  ('Behavioral Health', '{}'::jsonb),
+  ('Dermatology', '{}'::jsonb),
+  ('ENT', '{}'::jsonb),
+  ('Ophthalmology', '{}'::jsonb),
+  ('Gastroenterology', '{}'::jsonb),
+  ('Pulmonology', '{}'::jsonb),
+  ('Nephrology', '{}'::jsonb),
+  ('Urology', '{}'::jsonb),
+  ('Endocrinology', '{}'::jsonb),
+  ('Infectious Disease', '{}'::jsonb),
+  ('Rehabilitation', '{}'::jsonb)
 ON CONFLICT (name) DO NOTHING;
 
 -- Staff (look up dept ids by name)
