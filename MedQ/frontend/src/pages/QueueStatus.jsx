@@ -92,7 +92,7 @@ export default function QueueStatus() {
   }, [visitId]);
 
   const handleBackToCheckIn = () => {
-  window.location.href = "http://localhost:3000/patient-checkin";};
+  window.location.href = "http://localhost:3000/patient-checkin";
   };
 
   if (!visitId) {
