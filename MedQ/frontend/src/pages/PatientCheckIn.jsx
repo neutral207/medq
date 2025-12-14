@@ -12,6 +12,39 @@ const REASONS = [
   "Pregnancy", "Mental health", "Other"
 ];
 
+function assignDeptAndSeverity(reason) {
+  const r = (reason || "").toLowerCase();
+
+  // default
+  let department = "Emergency";
+  let severity = 3;
+
+  if (r.includes("chest") || r.includes("shortness") || r.includes("allergic")) {
+    department = "Emergency";
+    severity = 4;
+  } else if (r.includes("injury") || r.includes("trauma")) {
+    department = "Emergency";
+    severity = 4;
+  } else if (r.includes("pregnancy")) {
+    department = "Pediatrics";
+    severity = 3;
+  } else if (r.includes("mental")) {
+    department = "Emergency";
+    severity = 3;
+  } else if (r.includes("lab work") || r.includes("immunization") || r.includes("physical")) {
+    department = "Radiology";
+    severity = 2;
+  } else if (r.includes("follow-up") || r.includes("medication refill")) {
+    department = "Radiology";
+    severity = 1;
+  } else if (r.includes("fever") || r.includes("cough") || r.includes("flu") || r.includes("covid") || r.includes("sore throat")) {
+    department = "Pediatrics";
+    severity = 2;
+  }
+
+  return { department, severity };
+}
+
 export default function PatientCheckIn() {
   const navigate = useNavigate();
 
@@ -44,30 +77,50 @@ export default function PatientCheckIn() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
+  e.preventDefault();
 
-    if (!formData.reason) {
-      alert("Please select a reason for your visit.");
-      openReasonList();
-      return;
-    }
+  const chosenReason =
+    formData.reason === "Other"
+      ? formData.customReason
+      : formData.reason;
 
-    if (formData.reason === "Other" && !formData.customReason.trim()) {
-      alert("Please describe your reason under 'Other'.");
-      return;
-    }
+  const { department, severity } =
+    assignDeptAndSeverity(chosenReason);
+
+  const payload = {
+    name: formData.name,
+    dob: formData.dob,
+    symptoms: chosenReason,
+    phone: formData.phone,
+    department,
+    severity,
+  };
+
+  const response = await fetch("/api/checkin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
     setLoading(true);
 
     try {
-      const payload = {
-        name: formData.name,
-        dob: formData.dob,
-        symptoms: formData.reason === "Other" ? formData.customReason : formData.reason,
-        phone: formData.phone,
-        department: "Emergency",
-      };
+      const chosenReason =
+  formData.reason === "Other"
+    ? formData.customReason
+    : formData.reason;
+
+const { department, severity } =
+  assignDeptAndSeverity(chosenReason);
+
+const payload = {
+  name: formData.name,
+  dob: formData.dob,
+  symptoms: chosenReason,
+  phone: formData.phone,
+  department,
+  severity,
+};
 
       const data = await apiRequest("/checkin", {
         method: "POST",
@@ -87,13 +140,15 @@ export default function PatientCheckIn() {
       } = visit;
 
       navigate("/queue-status", {
-        state: {
-          visitId: visit_id,
-          anonToken: anon_token,
-          department: deptFromServer || payload.department,
-          initialWait: predicted_wait_minutes,
-        },
-      });
+  state: {
+    visitId: data.visit.visit_id,
+    anonToken: data.visit.anon_token,
+    department: data.visit.department,
+    initialWait: data.visit.predicted_wait_minutes,
+    severity: data.visit.severity,
+    queuePosition: data.visit.queue_position,
+  },
+});
     } catch (err) {
       console.error(err);
       setError(err.message || "Error submitting check-in.");
