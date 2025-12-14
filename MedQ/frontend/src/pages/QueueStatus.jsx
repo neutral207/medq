@@ -12,6 +12,7 @@ export default function QueueStatus() {
   const [queuePosition, setQueuePosition] = useState(null);
   const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait);
   const [lastUpdated, setLastUpdated] = useState("");
+  const [statusError, setStatusError] = useState("");
 
   const startingSeconds = useMemo(() => {
     const mins = Number(estWaitMinutes);
@@ -55,26 +56,43 @@ export default function QueueStatus() {
   useEffect(() => {
     if (!visitId) return;
 
-    const fetchQueueStatus = async () => {
-      try {
-        const data = await apiRequest(`/api/queue_status/${visitId}`);
+    const fetchVisit = async () => {
+      setStatusError("");
 
-        if (data?.queuePosition != null) setQueuePosition(data.queuePosition);
-        if (data?.predictedWait != null) setEstWaitMinutes(data.predictedWait);
+      try {
+        // IMPORTANT: this route exists in your backend
+        const data = await apiRequest(`/visit/${visitId}`);
+        const visit = data?.visit;
+
+        if (!visit) {
+          setStatusError("Visit data not found in API response.");
+          return;
+        }
+
+        const qp = visit.queue_position ?? visit.queuePosition ?? null;
+        const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+
+        if (qp != null) setQueuePosition(qp);
+        if (pw != null) setEstWaitMinutes(pw);
 
         setLastUpdated(new Date().toLocaleString());
+
+        if (qp == null) {
+          setStatusError("Visit loaded, but queue position is missing.");
+        }
       } catch (err) {
-        console.error("Error fetching queue status:", err);
+        console.error("Error fetching visit:", err);
+        setStatusError(String(err?.message || err));
       }
     };
 
-    fetchQueueStatus();
-    const interval = setInterval(fetchQueueStatus, 30000);
+    fetchVisit();
+    const interval = setInterval(fetchVisit, 30000);
     return () => clearInterval(interval);
   }, [visitId]);
 
   const handleBackToCheckIn = () => {
-    navigate("/checkin");
+  window.location.href = "http://localhost:3000/patient-checkin";};
   };
 
   if (!visitId) {
@@ -102,9 +120,7 @@ export default function QueueStatus() {
           <img src={medqLogo} alt="MedQ" className="h-10 w-10" />
           <div>
             <h1 className="text-4xl font-bold">Queue Status</h1>
-            <p className="text-slate-300 text-sm mt-1">
-              Track your position and estimated wait time
-            </p>
+            <p className="text-slate-300 text-sm mt-1">Track your position and estimated wait time</p>
           </div>
         </header>
 
@@ -128,6 +144,7 @@ export default function QueueStatus() {
               <div className="text-3xl font-bold mt-1">
                 {queuePosition != null ? queuePosition : "Loading..."}
               </div>
+              {statusError ? <div className="text-sm text-red-300 mt-2">{statusError}</div> : null}
             </div>
 
             <div>

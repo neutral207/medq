@@ -280,11 +280,22 @@ def get_visit(visit_id):
                     p.phone,
                     p.symptoms,
                     p.severity,
-                    d.name AS department_name
+                    d.name AS department_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM visits v2
+                        WHERE v2.dept_id = v.dept_id
+                          AND v2.status <> 'left'
+                          AND v2.checkin_time IS NOT NULL
+                          AND v.checkin_time IS NOT NULL
+                          AND (v2.checkin_time AT TIME ZONE 'utc')::date = (now() AT TIME ZONE 'utc')::date
+                          AND v2.checkin_time <= v.checkin_time
+                    ) AS queue_position
                 FROM visits v
                 JOIN patients p ON p.patient_id = v.patient_id
                 JOIN departments d ON d.dept_id = v.dept_id
-                WHERE v.visit_id = %s;
+                WHERE v.visit_id = %s
+                LIMIT 1;
                 """,
                 (visit_id,),
             )
@@ -292,18 +303,16 @@ def get_visit(visit_id):
 
     if not row:
         raise ApiError(f"Visit not found: {visit_id}", code=404)
-    
+
     visit = {
         "visit_id": str(row["visit_id"]),
         "status": row["status"],
-        "checkin_time": row["checkin_time"].isoformat()
-            if row["checkin_time"] else None,
-        "service_start": row["service_start"].isoformat()
-            if row["service_start"] else None,
-        "service_end": row["service_end"].isoformat()
-            if row["service_end"] else None,
+        "checkin_time": row["checkin_time"].isoformat() if row["checkin_time"] else None,
+        "service_start": row["service_start"].isoformat() if row["service_start"] else None,
+        "service_end": row["service_end"].isoformat() if row["service_end"] else None,
         "predicted_wait_minutes": row["predicted_wait_minutes"],
         "actual_wait_minutes": row["actual_wait_minutes"],
+        "queue_position": int(row["queue_position"]) if row["queue_position"] is not None else None,
         "anon_token": row["anon_token"],
         "name": row["full_name"],
         "dob": row["dob"].isoformat() if row["dob"] else None,
@@ -313,7 +322,7 @@ def get_visit(visit_id):
         "department": row["department_name"],
     }
 
-    return jsonify({ "visit": visit })
+    return jsonify({"visit": visit}), 200
   
 @api_bp.patch("/visit/<visit_id>/status")
 def update_visit_status(visit_id):
