@@ -1,202 +1,175 @@
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
-import { useEffect, useState } from "react";
 import { apiRequest } from "../apiClient";
 
 export default function QueueStatus() {
   const location = useLocation();
-  console.log("QueueStatus location.state:", location.state);
   const navigate = useNavigate();
 
-  const {
-    visitId,
-    anonToken,
-    department,
-    initialWait,
-  } = location.state || {};
+  const { visitId, anonToken, department, initialWait, severity } = location.state || {};
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [position, setPosition] = useState(null);
-  const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait ?? null);
-  const [checkinTime, setCheckinTime] = useState("");
+  const [queuePosition, setQueuePosition] = useState(null);
+  const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait);
   const [lastUpdated, setLastUpdated] = useState("");
+  const [statusError, setStatusError] = useState("");
+
+  const startingSeconds = useMemo(() => {
+    const mins = Number(estWaitMinutes);
+    if (!Number.isFinite(mins) || mins <= 0) return 0;
+    return Math.round(mins * 60);
+  }, [estWaitMinutes]);
+
+  const [secondsLeft, setSecondsLeft] = useState(startingSeconds);
 
   useEffect(() => {
-    if (!visitId && !anonToken && !department) {
-      setError("Missing visit information. Please complete check-in again.");
-      setLoading(false);
-      return;
-    }
+    setSecondsLeft(startingSeconds);
+  }, [startingSeconds]);
 
-    async function loadQueue() {
-      try {
-        setLoading(true);
-        setError("");
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
 
-        const data = await apiRequest(
-          `/queue?department=${encodeURIComponent(department)}`
-        );
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
 
-        const queue = data.queue || [];
+    return () => clearInterval(timer);
+  }, [secondsLeft]);
 
-        const index = queue.findIndex((item) => {
-          const itemVisitId = item.visit_id ?? item.visitId;
-          const itemAnonToken = item.anon_token ?? item.anonToken;
-          return itemVisitId === visitId || itemAnonToken === anonToken;
-        });
-
-        if (index == -1) {
-          setPosition(null);
-          setEstWaitMinutes(null);
-          setCheckinTime("");
-        } else {
-          const entry = queue[index];
-          setPosition(index + 1);
-          setEstWaitMinutes(entry.predicted_wait_minutes ?? entry.predictedWaitMinutes);
-
-          if (entry.checkin_time) {
-            const checkinDate = new Date(entry.checkin_time);
-            setCheckinTime(
-              checkinDate.toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              })
-            );
-          }
-        }
-
-        const now = new Date();
-        setLastUpdated(
-          now.toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        );
-      } catch (err) {
-        console.error(err);
-        setError(err.message || "Error loading queue status.");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadQueue();
-
-    const id = setInterval(loadQueue, 30000);
-    return () => clearInterval(id);
-  }, [department, visitId, anonToken]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
-        <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 md:mb-6">
-          <img
-            src={medqLogo}
-            alt="Med-Q logo"
-            className="block h-32 object-contain drop-shadow-lg"
-          />
-          <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">
-            Queue Status
-          </h1>
-        </header>
-        <main className="px-6 flex justify-center py-8 md:py-12">
-          <p className="text-center text-white/80">Loading your queue status...</p>
-        </main>
-      </div>
-    );
+  function formatTime(totalSeconds) {
+    const s = Math.max(0, Number(totalSeconds) || 0);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
   }
 
-  if (error) {
+  function severityLabel(s) {
+    const n = Number(s);
+    if (n >= 5) return "Critical";
+    if (n === 4) return "High";
+    if (n === 3) return "Moderate";
+    if (n === 2) return "Low";
+    if (n === 1) return "Very Low";
+    return "Unknown";
+  }
+
+  useEffect(() => {
+    if (!visitId) return;
+
+    const fetchVisit = async () => {
+      setStatusError("");
+
+      try {
+        // IMPORTANT: this route exists in your backend
+        const data = await apiRequest(`/visit/${visitId}`);
+        const visit = data?.visit;
+
+        if (!visit) {
+          setStatusError("Visit data not found in API response.");
+          return;
+        }
+
+        const qp = visit.queue_position ?? visit.queuePosition ?? null;
+        const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+
+        if (qp != null) setQueuePosition(qp);
+        if (pw != null) setEstWaitMinutes(pw);
+
+        setLastUpdated(new Date().toLocaleString());
+
+        if (qp == null) {
+          setStatusError("Visit loaded, but queue position is missing.");
+        }
+      } catch (err) {
+        console.error("Error fetching visit:", err);
+        setStatusError(String(err?.message || err));
+      }
+    };
+
+    fetchVisit();
+    const interval = setInterval(fetchVisit, 30000);
+    return () => clearInterval(interval);
+  }, [visitId]);
+
+  const handleBackToCheckIn = () => {
+  window.location.href = "http://localhost:3000/patient-checkin";
+  };
+
+  if (!visitId) {
     return (
-      <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
-        <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 md:mb-6">
-          <img
-            src={medqLogo}
-            alt="Med-Q logo"
-            className="block h-32 object-contain drop-shadow-lg"
-          />
-          <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">
-            Queue Status
-          </h1>
-        </header>
-        <main className="px-6 flex flex-col items-center justify-center gap-4 px-6 py-8 md:py-12">
-          <p className="text-center text-red-300">{error}</p>
+      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+        <main className="w-full max-w-3xl px-6 py-10">
+          <h1 className="text-3xl font-bold mb-2">Queue Status</h1>
+          <p className="text-slate-300">No visit information found. Please check in again.</p>
+
           <button
-            onClick={() => navigate("/patient-checkin")}
-            className="mt-2 px-4 py-2 rounded-md bg-medqPink hover:bg-pink-400 font-semibold"
+            onClick={handleBackToCheckIn}
+            className="mt-6 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
           >
-            Back to Check-In
+            Back to Check In
           </button>
         </main>
       </div>
     );
   }
 
-  const urgency = "Moderate";
-  
   return (
-    <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
-      {/* Header */}
-      <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 md:mb-6">
-        <img
-          src={medqLogo}
-          alt="Med-Q logo"
-          className="block h-32 object-contain drop-shadow-lg"
-        />
-        <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">
-          Queue Status
-        </h1>
-      </header>
-
-      <main className="px-6 flex justify-center py-8 md:py-12">
-        <section className="w-[360px] text-center space-y-6 text-[15px] font-medium">
-          {/* Top Message */}
-          <div className="space-y-2">
-            <p className="leading-snug">
-              Thank you. Your department will be
-            </p>
-            <p className="text-lg font-semibold">{department || "-"}</p>
-            <p className="leading-snug">
-              and your urgency level is
-            </p>
-            <p className="text-lg font-semibold">{urgency}</p>
+    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+      <main className="w-full max-w-3xl px-6 py-10">
+        <header className="mb-8 flex items-center gap-3">
+          <img src={medqLogo} alt="MedQ" className="h-10 w-10" />
+          <div>
+            <h1 className="text-4xl font-bold">Queue Status</h1>
+            <p className="text-slate-300 text-sm mt-1">Track your position and estimated wait time</p>
           </div>
+        </header>
 
-          {/* Queue Info */}
-          <div className="space-y-3">
-            <p className="text-lg font-semibold">Your place in queue:</p>
-            <p className="text-5xl font-bold tracking-tight">{position != null ? `#${position}` : "-"}</p>
+        <div className="bg-white/10 border border-white/10 rounded-2xl p-6 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <div className="text-slate-300 text-xs">Department</div>
+              <div className="text-lg font-semibold mt-1">{department || "Unknown"}</div>
+            </div>
 
-            <div className="mt-2 space-y-1">
-              <p className="text-lg font-semibold">Estimated Wait Time:</p>
-              <p className="text-2xl font-semibold">
-                {estWaitMinutes != null ? `${estWaitMinutes} minutes` : "Calculating..."}
-              </p>
-              <p className="text-xs font-normal text-white/70">
-                (This page will update automatically)
-              </p>
+            <div>
+              <div className="text-slate-300 text-xs">Urgency</div>
+              <div className="text-lg font-semibold mt-1">
+                {severityLabel(severity)}
+                {severity != null ? ` (Severity ${severity})` : ""}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-300 text-xs">Your Queue Number</div>
+              <div className="text-3xl font-bold mt-1">
+                {queuePosition != null ? queuePosition : "Loading..."}
+              </div>
+              {statusError ? <div className="text-sm text-red-300 mt-2">{statusError}</div> : null}
+            </div>
+
+            <div>
+              <div className="text-slate-300 text-xs">Estimated Time Remaining</div>
+              <div className="text-3xl font-bold mt-1">
+                {estWaitMinutes != null ? formatTime(secondsLeft) : "Calculating..."}
+              </div>
+              <div className="text-slate-300 text-xs mt-2">
+                {lastUpdated ? `Last updated: ${lastUpdated}` : ""}
+              </div>
             </div>
           </div>
 
-          <div className="text-xs font-normal text-white/80 space-y-1 leading-relaxed">
-            {checkinTime && (
-              <p>
-                You completed your check-in at:{" "}
-                <span className="font-semibold">{checkinTime}</span>
-              </p>
-            )}
-            {lastUpdated && (
-              <p>
-                Last updated:{" "}
-                <span className="font-semibold">{lastUpdated}</span>
-              </p>
-            )}
-            <p className="mt-2">
-              Please stay up to date with any announcements from the hospital about your care.
-            </p>
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <div className="text-slate-300 text-xs">Tracking Token</div>
+            <div className="font-mono text-sm mt-1 break-all">{anonToken || "N/A"}</div>
           </div>
-        </section>
+        </div>
+
+        <button
+          onClick={handleBackToCheckIn}
+          className="mt-8 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
+        >
+          Back to Check In
+        </button>
       </main>
     </div>
   );

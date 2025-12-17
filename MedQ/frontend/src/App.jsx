@@ -5,6 +5,7 @@ import StaffLogin from "./pages/StaffLogin.jsx";
 import QueueStatus from "./pages/QueueStatus.jsx";
 import StaffDashboard from "./pages/StaffDashboard.jsx";
 import PatientDetails from "./pages/PatientDetails.jsx";
+import StaffAnalytics from "./pages/StaffAnalytics.jsx";
 
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/queue-status" element={<QueueStatus />} />
         <Route path="/staff-dashboard" element={<StaffDashboard />} />
         <Route path="/patient-details/:id" element={<PatientDetails />} />
+        <Route path="/staff-analytics" element={<StaffAnalytics />} />
       </Routes>
     </BrowserRouter>
   );
