@@ -32,7 +32,7 @@ class WaitTimePrediction:
                 df['queue_position'] = 0
 
             X = df[self.feature_names].values
-            Y = df['actual_wait_minutes'].values
+            y = df['actual_wait_minutes'].values
 
             return X, y, df
         except FileNotFoundError:

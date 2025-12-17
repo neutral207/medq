@@ -284,3 +284,9 @@ def test_model_accepts_numpy_array():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+
+
+
+# pytest C:\Users\jteam\source\repos\medq-1\MedQ\backend\tests\test_model_accuracy.py -v
