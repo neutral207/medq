@@ -19,18 +19,16 @@ is a real-time patient flow and queue management system designed to reduce medic
 - Overload Alerts
 - Historical Data 
 - Role-Based Login
-- Staff Utilization Dashboard
-- Configurable Simulation Settings
+- Heatmap of Wait Times by Hour/Day  
 - Custom Data Export (CSV)
 - Public Patient ETA Display
 
 ### Enhancement Features 
 - Predictive Staffing Recommendations  
 - Integration API for hospital systems  
-- Heatmap of Wait Times by Hour/Day  
 - AI-Powered Severity Classification  
 - IoT Integration for Check-In Kiosks 
-
+- Staff Utilization Dashboard
 ---
 
 ## Techonlogies
@@ -89,11 +87,12 @@ This project is licensed under the **MIT License** – free for modification and
 - **Amy Darr** -  UI and dashboard design  
 - **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
 deployment 
-- **Cheyenne McManhan** - - Machine Learning Engineer – Prediction model creation and maintenance  
+- **Cheyenne McMahan** - - Machine Learning Engineer – Prediction model creation and maintenance  
 
  - QA Engineer – API and UI testing
 
   ** Project Status 
   **Status:** Pre-Alpha
-  The sataus of the project is settting everything up. 
+  The project's initial phase is almost complete, with initial testing beginning soon.
+
   
