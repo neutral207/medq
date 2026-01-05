@@ -9,6 +9,11 @@ from datetime import datetime, timezone
 
 api_bp = Blueprint("api", __name__)
 
+# Import socketio for real-time updates
+def get_socketio():
+    from src.config.main import socketio
+    return socketio
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/medq",
@@ -44,7 +49,16 @@ def get_queue():
         end_date = start_date
 
     where_date = ""
-    params = [department_name]
+    where_dept = ""
+    params = []
+
+    # Handle "all" departments case
+    if department_name and department_name.lower() != "all":
+        where_dept = "WHERE d.name = %s"
+        params.append(department_name)
+    else:
+        where_dept = "WHERE 1=1"
+        department_name = "all"
 
     if start_date:
         where_date += " AND v.checkin_time::date >= %s"
@@ -66,11 +80,12 @@ def get_queue():
                     p.phone,
                     p.symptoms,
                     v.checkin_time,
-                    v.predicted_wait_minutes
+                    v.predicted_wait_minutes,
+                    d.name as department
                 FROM visits v
                 JOIN patients p ON p.patient_id = v.patient_id
                 JOIN departments d ON d.dept_id = v.dept_id
-                WHERE d.name = %s
+                {where_dept}
                     AND v.status <> 'left'
                     {where_date}
                 ORDER BY v.checkin_time ASC;
@@ -91,6 +106,7 @@ def get_queue():
             "symptoms": row["symptoms"],
             "checkin_time": row["checkin_time"].isoformat() if row["checkin_time"] else None,
             "predicted_wait_minutes": row["predicted_wait_minutes"],
+            "department": row["department"],
         }
         for row in rows
     ]
@@ -258,6 +274,13 @@ def check_in():
         },
     }
 
+    # Emit WebSocket event for queue update
+    try:
+        socketio = get_socketio()
+        socketio.emit("queue_update", {"message": "New patient checked in", "department": department_name})
+    except Exception as e:
+        print(f"Failed to emit queue_update: {e}")
+
     return jsonify({"message": "checked in", "visit": visit}), 201
   
 @api_bp.get("/visit/<visit_id>")
@@ -389,6 +412,13 @@ def update_visit_status(visit_id):
             )
             row = cur.fetchone()
             conn.commit()
+
+    # Emit WebSocket event for queue update
+    try:
+        socketio = get_socketio()
+        socketio.emit("queue_update", {"message": "Visit status updated", "visit_id": visit_id, "status": new_status})
+    except Exception as e:
+        print(f"Failed to emit queue_update: {e}")
 
     return jsonify({
         "visit_id": str(row["visit_id"]),

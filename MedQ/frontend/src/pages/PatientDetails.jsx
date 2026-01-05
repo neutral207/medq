@@ -60,12 +60,14 @@ export default function PatientDetails() {
   const handleBack = () => {
     const fromDate = location.state?.fromDate;
     const fromDepartment = location.state?.fromDepartment;
+    const fromStatusFilter = location.state?.fromStatusFilter;
 
-    if (fromDate || fromDepartment) {
+    if (fromDate || fromDepartment || fromStatusFilter) {
       navigate("/staff-dashboard", {
         state: {
-          date: fromDate,
-          department: fromDepartment,
+          fromDate,
+          fromDepartment,
+          fromStatusFilter,
         },
       });
     } else {
