@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 
-export default function AssignStaffModal({ isOpen, onClose, onAssign, availableStaff, patientName }) {
+export default function AssignStaffModal({ isOpen, onClose, onAssign, availableStaff, patientName, patientDepartment }) {
   const [selectedStaffId, setSelectedStaffId] = useState("");
+
+  // Filter staff to only show those from the patient's department
+  const departmentStaff = availableStaff.filter(
+    (staff) => staff.department_name === patientDepartment
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -21,30 +26,30 @@ export default function AssignStaffModal({ isOpen, onClose, onAssign, availableS
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-[#2D3047] rounded-2xl p-6 w-full max-w-md shadow-2xl">
-        <h2 className="text-2xl font-bold mb-4 text-white">Assign Staff Member</h2>
-        <p className="text-slate-300 text-sm mb-6">
+      <div className="card-modal w-full max-w-md">
+        <h2 className="heading-2 mb-4 text-white">Assign Staff Member</h2>
+        <p className="subtitle mb-6">
           Select a staff member to assign to <span className="font-semibold">{patientName}</span>
         </p>
 
-        {availableStaff.length === 0 ? (
+        {departmentStaff.length === 0 ? (
           <div className="mb-6">
-            <p className="text-red-300 text-sm">
-              No staff members are currently clocked in for this department.
+            <p className="text-body text-red-300">
+              No staff members from the {patientDepartment} department are currently clocked in.
             </p>
           </div>
         ) : (
           <div className="mb-6">
-            <label className="block text-sm font-semibold text-white mb-2">
-              Staff Member
+            <label className="block text-body font-semibold text-white mb-2">
+              Staff Member ({patientDepartment})
             </label>
             <select
               value={selectedStaffId}
               onChange={(e) => setSelectedStaffId(e.target.value)}
-              className="w-full rounded-xl bg-[#1a1d2e] border border-slate-600/70 px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-medqPink"
+              className="select-standard w-full"
             >
               <option value="">Select a staff member...</option>
-              {availableStaff.map((staff) => (
+              {departmentStaff.map((staff) => (
                 <option key={staff.staff_id} value={staff.staff_id}>
                   {staff.name} ({staff.role})
                 </option>
@@ -56,14 +61,14 @@ export default function AssignStaffModal({ isOpen, onClose, onAssign, availableS
         <div className="flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2 rounded-xl bg-slate-600 text-sm font-semibold shadow-md hover:bg-slate-500"
+            className="btn-secondary"
           >
             Cancel
           </button>
-          {availableStaff.length > 0 && (
+          {departmentStaff.length > 0 && (
             <button
               onClick={handleAssign}
-              className="px-6 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md hover:bg-medqPink/90"
+              className="btn-primary"
             >
               Assign
             </button>

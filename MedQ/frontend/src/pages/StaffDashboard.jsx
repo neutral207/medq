@@ -39,22 +39,22 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
 
   return (
-    <div className="bg-[#2D3047] rounded-2xl px-4 py-3 mt-3 shadow-md">
+    <div className="card-standard mt-3">
       <div className="flex items-start gap-3">
         <span className={`w-3 h-3 rounded-full mt-1 ${dotColor}`} />
-        <div className="flex-1 text-sm">
-          <p><span className="font-semibold">Name:</span> {item.name}</p>
-          <p><span className="font-semibold">Dept:</span> {item.dept}</p>
-          <p><span className="font-semibold">ETA:</span> {item.eta}</p>
+        <div className="flex-1">
+          <h3 className="heading-3 mb-1">{item.name}</h3>
+          <p className="text-body text-slate-300">Department: {item.dept}</p>
+          <p className="text-small text-slate-400 mt-1">ETA: {item.eta}</p>
         </div>
       </div>
 
-      <div className="mt-3 flex justify-end gap-2 text-xs">
+      <div className="mt-3 flex justify-end gap-2">
         {/* Details Button */}
         {onViewDetails && (
           <button
             onClick={() => onViewDetails(item)}
-            className="rounded-full border border-slate-400/70 px-4 py-1 hover:bg-slate-600/80 transition"
+            className="btn-small"
           >
             Details
           </button>
@@ -65,7 +65,7 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
             <button
               key={label}
               onClick={() => onAction && onAction(item, label)}
-              className="rounded-full border border-slate-400/70 px-4 py-1 hover:bg-slate-600/80 transition"
+              className="btn-small"
             >
               {label}
             </button>
@@ -342,12 +342,12 @@ export default function StaffDashboard() {
   }, [socket, department]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
-      <main className="w-full max-w-3xl px-6 py-10">
+    <div className="page-gradient flex justify-center">
+      <main className="w-full container-staff">
         {/* Title */}
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold">Staff Dashboard</h1>
-          <p className="text-slate-300 text-sm mt-1">
+        <header className="header-section">
+          <h1 className="heading-1">Staff Dashboard</h1>
+          <p className="subtitle">
             Monitor and manage in real-time patient queue
           </p>
         </header>
@@ -370,12 +370,12 @@ export default function StaffDashboard() {
         )}
 
         {/* Row 1: Date + Filters */}
-        <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 section-margin">
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-[#2D3047] text-xs border border-slate-600/60"
+            className="input-date"
           />
 
           <div className="flex items-center gap-3 ml-auto">
@@ -383,7 +383,7 @@ export default function StaffDashboard() {
             <select
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
-              className="ml-auto rounded-full bg-[#2D3047] border-slate-600/70 px-4 py-2 text-xs"
+              className="select-standard ml-auto"
             >
               {DEPARTMENTS.map((dept) => (
                 <option key={dept.value} value={dept.value}>
@@ -395,7 +395,7 @@ export default function StaffDashboard() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="ml-auto rounded-full bg-[#2D3047] border-slate-600/70 px-4 py-2 text-xs"
+              className="select-standard ml-auto"
             >
               <option value="all">Status / Dept</option>
               <option value="waiting">Waiting</option>
@@ -417,12 +417,12 @@ export default function StaffDashboard() {
           <>
             {/* Waiting */}
             {showSection("waiting") && (
-              <section className="mb-7">
-                <h3 className="text-sm font-semibold mb-1">
+              <section className="section-margin">
+                <h3 className="heading-2 mb-4">
                   Waiting ({waiting.length})
                 </h3>
                 {waiting.length === 0 ? (
-                  <p className="text-slate-400 text-sm italic mt-3">No patients waiting</p>
+                  <p className="text-empty mt-3">No patients waiting</p>
                 ) : (
                   waiting.map((item) => (
                     <QueueCard
@@ -439,12 +439,12 @@ export default function StaffDashboard() {
 
             {/* In Progress */}
             {showSection("in-progress") && (
-              <section className="mb-7">
-                <h3 className="text-sm font-semibold mb-1">
+              <section className="section-margin">
+                <h3 className="heading-2 mb-4">
                   In Progress ({inProgress.length})
                 </h3>
                 {inProgress.length === 0 ? (
-                  <p className="text-slate-400 text-sm italic mt-3">No patients in progress</p>
+                  <p className="text-empty mt-3">No patients in progress</p>
                 ) : (
                   inProgress.map((item) => (
                     <QueueCard
@@ -461,12 +461,12 @@ export default function StaffDashboard() {
 
             {/* Completed */}
             {showSection("completed") && (
-              <section className="mb-7">
-                <h3 className="text-sm font-semibold mb-1">
+              <section className="section-margin">
+                <h3 className="heading-2 mb-4">
                   Completed ({completed.length})
                 </h3>
                 {completed.length === 0 ? (
-                  <p className="text-slate-400 text-sm italic mt-3">No completed visits</p>
+                  <p className="text-empty mt-3">No completed visits</p>
                 ) : (
                   completed.map((item) => (
                     <QueueCard

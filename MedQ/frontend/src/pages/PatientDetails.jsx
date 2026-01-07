@@ -99,15 +99,15 @@ export default function PatientDetails() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
-        <div className="w-full max-w-2xl px-6 py-10">
+      <div className="page-gradient flex justify-center">
+        <div className="w-full container-patient">
           <button
             onClick={handleBack}
-            className="text-sm mb-4 hover:underline"
+            className="btn-primary mb-4"
           >
             ← Back to Dashboard
           </button>
-          <p className="text-white/80">Loading patient information...</p>
+          <p className="text-body text-white/80">Loading patient information...</p>
         </div>
       </div>
     );
@@ -115,15 +115,15 @@ export default function PatientDetails() {
 
   if (error || !visit) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
-        <div className="w-full max-w-2xl px-6 py-10">
+      <div className="page-gradient flex justify-center">
+        <div className="w-full container-patient">
           <button
             onClick={handleBack}
-            className="text-sm mb-4 hover:underline"
+            className="btn-primary mb-4"
           >
             ← Back to Dashboard
           </button>
-          <p className="text-red-300">
+          <p className="text-body text-red-300">
             {error || "Unable to load patient information."}
           </p>
         </div>
@@ -138,18 +138,18 @@ export default function PatientDetails() {
   const serviceEnd = formatDateTime(visit.service_end);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
-      <div className="w-full max-w-2xl px-6 py-10">
+    <div className="page-gradient flex justify-center">
+      <div className="w-full container-patient">
         {/* Back + Title */}
         <button
           onClick={handleBack}
-          className="px-6 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md mb-4 hover:bg-medqPink/90"
+          className="btn-primary mb-4"
         >
           ← Back to Dashboard
         </button>
 
-        <h1 className="text-3xl font-bold mb-6">Patient Information</h1>
-        <p className="text-xs text-slate-300 mb-6">
+        <h1 className="heading-1 mb-6">Patient Information</h1>
+        <p className="text-body text-slate-300 mb-6">
           Status: {" "}
           <span className="font-semibold">
             {visit.status?.replace("-", " ") || "N/A"}
@@ -157,9 +157,9 @@ export default function PatientDetails() {
         </p>
 
         {/* Patient Info */}
-        <section className="space-y-4 text-sm leading-relaxed">
+        <section className="space-y-4 text-body leading-relaxed">
           <div>
-            <p className="font-semibold">Patient Name</p>
+            <h3 className="heading-3 mb-1">Patient Name</h3>
             <p>{visit.name}</p>
             <p>{triage}</p>
             <p>{dob}</p>
@@ -167,28 +167,28 @@ export default function PatientDetails() {
           </div>
 
           <div>
-            <p className="font-semibold">Department</p>
+            <h3 className="heading-3 mb-1">Department</h3>
             <p>{visit.department}</p>
           </div>
 
           <div>
-            <p className="font-semibold">Patient Sympton Description</p>
+            <h3 className="heading-3 mb-1">Patient Symptom Description</h3>
             <p>{visit.symptoms}</p>
           </div>
 
           <div>
-            <p className="font-semibold">Assigned Staff:</p>
+            <h3 className="heading-3 mb-1">Assigned Staff</h3>
             {visit.assigned_staff_name ? (
               <p>
                 {visit.assigned_staff_role === "physician" || visit.assigned_staff_role === "doctor" ? "Doctor" : visit.assigned_staff_role === "nurse" ? "Nurse" : "Staff"}: {visit.assigned_staff_name}
               </p>
             ) : (
-              <p className="text-slate-400 italic">Not yet assigned</p>
+              <p className="text-empty">Not yet assigned</p>
             )}
           </div>
 
           <div>
-            <p className="font-semibold">Time Metrics</p>
+            <h3 className="heading-3 mb-1">Time Metrics</h3>
             <p>Check-In Time: {checkin_time}</p>
             <p>Service Start: {serviceStart}</p>
             <p>Service End: {serviceEnd}</p>
