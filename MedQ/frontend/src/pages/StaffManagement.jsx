@@ -115,16 +115,16 @@ export default function StaffManagement() {
   const offDutyStaff = staff.filter((s) => !s.on_duty);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
-      <main className="w-full max-w-5xl px-6 py-10">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold">Staff Management</h1>
-          <p className="text-slate-300 text-sm mt-1">
+    <div className="page-gradient flex justify-center">
+      <main className="w-full container-staff">
+        <header className="header-section">
+          <h1 className="heading-1">Staff Management</h1>
+          <p className="subtitle">
             Track staff availability and manage shifts
           </p>
         </header>
 
-        <div className="flex gap-3 mb-6">
+        <div className="flex gap-3 section-margin">
           <TabSwitcher
             tabs={[
               { label: "Board", to: "/staff-dashboard" },
@@ -136,7 +136,7 @@ export default function StaffManagement() {
           <select
             value={departmentFilter}
             onChange={(e) => setDepartmentFilter(e.target.value)}
-            className="ml-auto rounded-full bg-[#2D3047] border-slate-600/70 px-4 py-2 text-xs"
+            className="select-standard ml-auto"
           >
             <option value="all">All Departments</option>
             <option value="Emergency">Emergency</option>
@@ -159,41 +159,41 @@ export default function StaffManagement() {
         ) : (
           <>
             {/* On Duty Section */}
-            <section className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">
+            <section className="section-margin">
+              <h2 className="heading-2 mb-4">
                 On Duty ({onDutyStaff.length})
               </h2>
               {onDutyStaff.length === 0 ? (
-                <p className="text-slate-400 text-sm italic">No staff currently on duty</p>
+                <p className="text-empty">No staff currently on duty</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {onDutyStaff.map((member) => (
                     <div
                       key={member.staff_id}
-                      className="bg-[#2D3047] rounded-2xl px-4 py-4 shadow-md"
+                      className="card-standard"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold">{member.name}</h3>
+                            <h3 className="heading-3">{member.name}</h3>
                             <span
                               className={`${
                                 ROLE_COLORS[member.role] || "bg-gray-500"
-                              } text-xs px-2 py-1 rounded-full`}
+                              } text-small px-2 py-1 rounded-full`}
                             >
                               {member.role}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-300">
+                          <p className="text-body text-slate-300">
                             Department: {member.department_name}
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="text-small text-slate-400 mt-1">
                             Clocked in: {new Date(member.clock_in).toLocaleTimeString()}
                           </p>
                         </div>
                         <button
                           onClick={() => handleClockOut(member.staff_id)}
-                          className="px-4 py-2 rounded-xl bg-red-500/80 text-sm font-semibold shadow hover:bg-red-500"
+                          className="btn-danger"
                         >
                           Clock Out
                         </button>
@@ -206,43 +206,43 @@ export default function StaffManagement() {
 
             {/* Off Duty Section */}
             <section>
-              <h2 className="text-2xl font-semibold mb-4">
+              <h2 className="heading-2 mb-4">
                 Off Duty ({offDutyStaff.length})
               </h2>
               {offDutyStaff.length === 0 ? (
-                <p className="text-slate-400 text-sm italic">All staff are on duty</p>
+                <p className="text-empty">All staff are on duty</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {offDutyStaff.map((member) => (
                     <div
                       key={member.staff_id}
-                      className="bg-[#2D3047]/50 rounded-2xl px-4 py-4 shadow-md"
+                      className="card-standard opacity-70"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold">{member.name}</h3>
+                            <h3 className="heading-3">{member.name}</h3>
                             <span
                               className={`${
                                 ROLE_COLORS[member.role] || "bg-gray-500"
-                              } text-xs px-2 py-1 rounded-full`}
+                              } text-small px-2 py-1 rounded-full`}
                             >
                               {member.role}
                             </span>
                           </div>
-                          <p className="text-sm text-slate-300">
+                          <p className="text-body text-slate-300">
                             Department: {member.department_name}
                           </p>
                         </div>
                         {member.active ? (
                           <button
                             onClick={() => handleClockIn(member.staff_id)}
-                            className="px-4 py-2 rounded-xl bg-green-500/80 text-sm font-semibold shadow hover:bg-green-500"
+                            className="btn-success"
                           >
                             Clock In
                           </button>
                         ) : (
-                          <span className="text-xs text-slate-500 italic">Inactive</span>
+                          <span className="text-small text-slate-500 italic">Inactive</span>
                         )}
                       </div>
                     </div>
