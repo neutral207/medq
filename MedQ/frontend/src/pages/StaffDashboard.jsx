@@ -39,7 +39,7 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
 
   return (
-    <div className="card-standard mt-3">
+    <div className="card-standard">
       <div className="flex items-start gap-3">
         <span className={`w-3 h-3 rounded-full mt-1 ${dotColor}`} />
         <div className="flex-1">
@@ -422,17 +422,19 @@ export default function StaffDashboard() {
                   Waiting ({waiting.length})
                 </h3>
                 {waiting.length === 0 ? (
-                  <p className="text-empty mt-3">No patients waiting</p>
+                  <p className="text-empty">No patients waiting</p>
                 ) : (
-                  waiting.map((item) => (
-                    <QueueCard
-                      key={item.id}
-                      item={item}
-                      actions={["Assign", "Conclude"]}
-                      onViewDetails={handleViewDetails}
-                      onAction={handleAction}
-                    />
-                  ))
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {waiting.map((item) => (
+                      <QueueCard
+                        key={item.id}
+                        item={item}
+                        actions={["Assign", "Conclude"]}
+                        onViewDetails={handleViewDetails}
+                        onAction={handleAction}
+                      />
+                    ))}
+                  </div>
                 )}
               </section>
             )}
@@ -444,17 +446,19 @@ export default function StaffDashboard() {
                   In Progress ({inProgress.length})
                 </h3>
                 {inProgress.length === 0 ? (
-                  <p className="text-empty mt-3">No patients in progress</p>
+                  <p className="text-empty">No patients in progress</p>
                 ) : (
-                  inProgress.map((item) => (
-                    <QueueCard
-                      key={item.id}
-                      item={item}
-                      actions={["Wait", "Conclude"]}
-                      onViewDetails={handleViewDetails}
-                      onAction={handleAction}
-                    />
-                  ))
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {inProgress.map((item) => (
+                      <QueueCard
+                        key={item.id}
+                        item={item}
+                        actions={["Wait", "Conclude"]}
+                        onViewDetails={handleViewDetails}
+                        onAction={handleAction}
+                      />
+                    ))}
+                  </div>
                 )}
               </section>
             )}
@@ -466,17 +470,19 @@ export default function StaffDashboard() {
                   Completed ({completed.length})
                 </h3>
                 {completed.length === 0 ? (
-                  <p className="text-empty mt-3">No completed visits</p>
+                  <p className="text-empty">No completed visits</p>
                 ) : (
-                  completed.map((item) => (
-                    <QueueCard
-                      key={item.id}
-                      item={item}
-                      actions={["Wait", "Assign"]}
-                      onViewDetails={handleViewDetails}
-                      onAction={handleAction}
-                    />
-                  ))
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {completed.map((item) => (
+                      <QueueCard
+                        key={item.id}
+                        item={item}
+                        actions={["Wait", "Assign"]}
+                        onViewDetails={handleViewDetails}
+                        onAction={handleAction}
+                      />
+                    ))}
+                  </div>
                 )}
               </section>
             )}
@@ -491,6 +497,7 @@ export default function StaffDashboard() {
         onAssign={handleAssignStaff}
         availableStaff={availableStaff}
         patientName={selectedPatient?.name || ""}
+        patientDepartment={selectedPatient?.dept || ""}
       />
     </div>
   );

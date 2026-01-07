@@ -5,7 +5,12 @@ export default function AssignStaffModal({ isOpen, onClose, onAssign, availableS
 
   // Filter staff to only show those from the patient's department
   const departmentStaff = availableStaff.filter(
-    (staff) => staff.department_name === patientDepartment
+    (staff) => {
+      // Case-insensitive comparison to handle any naming variations
+      const staffDept = staff.department_name?.toLowerCase() || '';
+      const patientDept = patientDepartment?.toLowerCase() || '';
+      return staffDept === patientDept;
+    }
   );
 
   useEffect(() => {
