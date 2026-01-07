@@ -34,11 +34,11 @@ INSERT INTO staff (name, role, dept_id, active)
 SELECT v.name, v.role, d.dept_id, true
 FROM (VALUES
   ('Avery Chen','nurse','Emergency'),
-  ('Jordan Lee','physician','Emergency'),
-  ('Sam Patel','tech','Radiology'),
+  ('Jordan Lee','doctor','Emergency'),
+  ('Sam Patel','physician','Pediatrics'),
   ('Priya Desai','nurse','Pediatrics'),
-  ('Miguel Santos','physician','Cardiology'),
-  ('Taylor Brooks','admin','Emergency')
+  ('Miguel Santos','doctor','Cardiology'),
+  ('Taylor Brooks','doctor','Radiology')
 ) AS v(name, role, dept_name)
 JOIN departments d ON d.name = v.dept_name
 ON CONFLICT DO NOTHING;

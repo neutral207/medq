@@ -11,6 +11,7 @@ from flask_jwt_extended import JWTManager
 
 from src.app.errors import register_error_handlers
 from src.app.routes.api import api_bp
+from src.app.routes.staff_management import staff_mgmt_bp
 
 # Global Socket.IO instance
 socketio = SocketIO(cors_allowed_origins="*")
@@ -30,9 +31,10 @@ def create_app():
     # JWT (you can hook into this later)
     jwt = JWTManager(app)
 
-    # Register error handlers and API blueprint
+    # Register error handlers and API blueprints
     register_error_handlers(app)
     app.register_blueprint(api_bp, url_prefix="/api")
+    app.register_blueprint(staff_mgmt_bp, url_prefix="/api")
 
     @app.route("/health", methods=["GET"])
     def health():

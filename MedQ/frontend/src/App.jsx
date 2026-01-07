@@ -6,6 +6,7 @@ import QueueStatus from "./pages/QueueStatus.jsx";
 import StaffDashboard from "./pages/StaffDashboard.jsx";
 import PatientDetails from "./pages/PatientDetails.jsx";
 import StaffAnalytics from "./pages/StaffAnalytics.jsx";
+import StaffManagement from "./pages/StaffManagement.jsx";
 import { WebSocketProvider } from "./contexts/WebSocketContext.jsx";
 
 
@@ -21,7 +22,8 @@ function App() {
           <Route path="/staff-dashboard" element={<StaffDashboard />} />
           <Route path="/patient-details/:id" element={<PatientDetails />} />
           <Route path="/staff-analytics" element={<StaffAnalytics />} />
-        </Routes>
+          <Route path="/staff-management" element={<StaffManagement />} />
+        </Routes>      
       </BrowserRouter>
     </WebSocketProvider>
   );

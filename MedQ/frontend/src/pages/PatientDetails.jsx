@@ -105,7 +105,7 @@ export default function PatientDetails() {
             onClick={handleBack}
             className="text-sm mb-4 hover:underline"
           >
-            ← Back to Queue
+            ← Back to Dashboard
           </button>
           <p className="text-white/80">Loading patient information...</p>
         </div>
@@ -121,7 +121,7 @@ export default function PatientDetails() {
             onClick={handleBack}
             className="text-sm mb-4 hover:underline"
           >
-            ← Back to Queue
+            ← Back to Dashboard
           </button>
           <p className="text-red-300">
             {error || "Unable to load patient information."}
@@ -143,9 +143,9 @@ export default function PatientDetails() {
         {/* Back + Title */}
         <button
           onClick={handleBack}
-          className="text-sm mb-4 hover:underline"
+          className="px-6 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md mb-4 hover:bg-medqPink/90"
         >
-          ← Back to Queue
+          ← Back to Dashboard
         </button>
 
         <h1 className="text-3xl font-bold mb-6">Patient Information</h1>
@@ -178,10 +178,13 @@ export default function PatientDetails() {
 
           <div>
             <p className="font-semibold">Assigned Staff:</p>
-            <p>Nurse Name: N/A</p> 
-            <p>Nurse Name: N/A</p>
-            <p>Doctor Name: N/A</p>
-            <p>Patient Case Manager: N/A</p>
+            {visit.assigned_staff_name ? (
+              <p>
+                {visit.assigned_staff_role === "physician" || visit.assigned_staff_role === "doctor" ? "Doctor" : visit.assigned_staff_role === "nurse" ? "Nurse" : "Staff"}: {visit.assigned_staff_name}
+              </p>
+            ) : (
+              <p className="text-slate-400 italic">Not yet assigned</p>
+            )}
           </div>
 
           <div>
@@ -191,16 +194,6 @@ export default function PatientDetails() {
             <p>Service End: {serviceEnd}</p>
           </div>
         </section>
-
-        {/* Bottom Buttons */}
-        <div className="mt-8 flex gap-3">
-          <button className="px-6 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md">
-            Transfer
-          </button>
-          <button className="px-6 py-2 rounded-xl bg-medqPink text-sm font-semibold shadow-md">
-            Discharge
-          </button>
-        </div>
       </div>
     </div>
   );

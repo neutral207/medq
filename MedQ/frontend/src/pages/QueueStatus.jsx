@@ -2,23 +2,36 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
 import { apiRequest } from "../apiClient";
+import { useWebSocket } from "../contexts/WebSocketContext";
 
 export default function QueueStatus() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { socket } = useWebSocket();
 
   const { visitId, anonToken, department, initialWait, severity } = location.state || {};
 
   const [queuePosition, setQueuePosition] = useState(null);
   const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait);
+  const [checkinTime, setCheckinTime] = useState(null);
   const [lastUpdated, setLastUpdated] = useState("");
   const [statusError, setStatusError] = useState("");
 
   const startingSeconds = useMemo(() => {
     const mins = Number(estWaitMinutes);
     if (!Number.isFinite(mins) || mins <= 0) return 0;
+
+    // If we have a checkin time, calculate elapsed time and subtract from predicted wait
+    if (checkinTime) {
+      const checkinDate = new Date(checkinTime);
+      const now = new Date();
+      const elapsedMinutes = (now - checkinDate) / 1000 / 60;
+      const remainingMinutes = Math.max(0, mins - elapsedMinutes);
+      return Math.round(remainingMinutes * 60);
+    }
+
     return Math.round(mins * 60);
-  }, [estWaitMinutes]);
+  }, [estWaitMinutes, checkinTime]);
 
   const [secondsLeft, setSecondsLeft] = useState(startingSeconds);
 
@@ -53,6 +66,7 @@ export default function QueueStatus() {
     return "Unknown";
   }
 
+  // Initial fetch of visit data
   useEffect(() => {
     if (!visitId) return;
 
@@ -60,7 +74,6 @@ export default function QueueStatus() {
       setStatusError("");
 
       try {
-        // IMPORTANT: this route exists in your backend
         const data = await apiRequest(`/visit/${visitId}`);
         const visit = data?.visit;
 
@@ -71,9 +84,11 @@ export default function QueueStatus() {
 
         const qp = visit.queue_position ?? visit.queuePosition ?? null;
         const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+        const ct = visit.checkin_time ?? visit.checkinTime ?? null;
 
         if (qp != null) setQueuePosition(qp);
         if (pw != null) setEstWaitMinutes(pw);
+        if (ct != null) setCheckinTime(ct);
 
         setLastUpdated(new Date().toLocaleString());
 
@@ -87,9 +102,40 @@ export default function QueueStatus() {
     };
 
     fetchVisit();
-    const interval = setInterval(fetchVisit, 30000);
-    return () => clearInterval(interval);
   }, [visitId]);
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!socket || !visitId) return;
+
+    const handleQueueUpdate = async (data) => {
+      // Reload visit data when queue updates
+      try {
+        const response = await apiRequest(`/visit/${visitId}`);
+        const visit = response?.visit;
+
+        if (visit) {
+          const qp = visit.queue_position ?? visit.queuePosition ?? null;
+          const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+          const ct = visit.checkin_time ?? visit.checkinTime ?? null;
+
+          if (qp != null) setQueuePosition(qp);
+          if (pw != null) setEstWaitMinutes(pw);
+          if (ct != null) setCheckinTime(ct);
+
+          setLastUpdated(new Date().toLocaleString());
+        }
+      } catch (err) {
+        console.error("Error reloading visit after queue update:", err);
+      }
+    };
+
+    socket.on("queue_update", handleQueueUpdate);
+
+    return () => {
+      socket.off("queue_update", handleQueueUpdate);
+    };
+  }, [socket, visitId]);
 
   const handleBackToCheckIn = () => {
   window.location.href = "http://localhost:3000/patient-checkin";

@@ -78,6 +78,7 @@ export default function StaffAnalytics() {
           tabs={[
             { label: "Board", to: "/staff-dashboard" },
             { label: "Analytics", to: "/staff-analytics" },
+            { label: "Staff", to: "/staff-management" },
           ]}
         />
 

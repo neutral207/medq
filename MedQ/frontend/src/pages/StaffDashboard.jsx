@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { apiRequest } from "../apiClient";
 import TabSwitcher from "../components/TabSwitcher";
 import { useWebSocket } from "../contexts/WebSocketContext";
+import AssignStaffModal from "../components/AssignStaffModal";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -94,6 +95,9 @@ export default function StaffDashboard() {
     return today;
   });
   const [department, setDepartment] = useState("all");
+  const [availableStaff, setAvailableStaff] = useState([]);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
 
   // Restore filters from navigation state
   useEffect(() => {
@@ -111,6 +115,23 @@ export default function StaffDashboard() {
   const [queue, setQueue] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Load available on-duty staff (not currently assigned)
+  useEffect(() => {
+    async function loadStaff() {
+      try {
+        const url = department === "all"
+          ? "/staff/available"
+          : `/staff/available?department=${encodeURIComponent(department)}`;
+        const data = await apiRequest(url);
+        setAvailableStaff(data.staff || []);
+      } catch (err) {
+        console.error("Error loading staff:", err);
+      }
+    }
+
+    loadStaff();
+  }, [department, queue]); // Reload when queue changes
 
   const filteredQueue = useMemo(() => {
     if (!selectedDate) return queue;
@@ -153,6 +174,14 @@ export default function StaffDashboard() {
   }
 
   async function handleAction(item, label) {
+    // If "Assign" is clicked, open the modal
+    if (label === "Assign") {
+      setSelectedPatient(item);
+      setIsAssignModalOpen(true);
+      return;
+    }
+
+    // Handle other status changes
     const nextStatus = getNextStatus(item.status, label);
     if (nextStatus === item.status) return;
 
@@ -178,6 +207,38 @@ export default function StaffDashboard() {
         )
       );
     }
+  }
+
+  async function handleAssignStaff(staffId) {
+    if (!selectedPatient) return;
+
+    try {
+      await apiRequest(`/visit/${encodeURIComponent(selectedPatient.visitId)}/assign`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          assigned_staff: parseInt(staffId),
+          status: "in-progress"
+        }),
+      });
+
+      // Update local state
+      setQueue((prev) =>
+        prev.map((q) =>
+          q.id === selectedPatient.id ? { ...q, status: "in-progress" } : q
+        )
+      );
+
+      // Close modal
+      setIsAssignModalOpen(false);
+      setSelectedPatient(null);
+    } catch (err) {
+      setError(err.message || "Error assigning staff.");
+    }
+  }
+
+  function handleCloseModal() {
+    setIsAssignModalOpen(false);
+    setSelectedPatient(null);
   }
 
   // Load queue data from API
@@ -291,12 +352,13 @@ export default function StaffDashboard() {
           </p>
         </header>
 
-        {/* Row 1: Board / Analytics */}
+        {/* Row 1: Board / Analytics / Staff */}
         <TabSwitcher
           className="mb-4"
           tabs={[
             { label: "Board", to: "/staff-dashboard" },
             { label: "Analytics", to: "/staff-analytics" },
+            { label: "Staff", to: "/staff-management" },
           ]}
         />
 
@@ -421,6 +483,15 @@ export default function StaffDashboard() {
           </>
         )}
       </main>
+
+      {/* Assign Staff Modal */}
+      <AssignStaffModal
+        isOpen={isAssignModalOpen}
+        onClose={handleCloseModal}
+        onAssign={handleAssignStaff}
+        availableStaff={availableStaff}
+        patientName={selectedPatient?.name || ""}
+      />
     </div>
   );
 }

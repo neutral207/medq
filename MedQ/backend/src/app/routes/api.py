@@ -304,11 +304,13 @@ def get_visit(visit_id):
                     p.symptoms,
                     p.severity,
                     d.name AS department_name,
+                    s.name AS assigned_staff_name,
+                    s.role AS assigned_staff_role,
                     (
                         SELECT COUNT(*)
                         FROM visits v2
                         WHERE v2.dept_id = v.dept_id
-                          AND v2.status <> 'left'
+                          AND v2.status = 'waiting'
                           AND v2.checkin_time IS NOT NULL
                           AND v.checkin_time IS NOT NULL
                           AND (v2.checkin_time AT TIME ZONE 'utc')::date = (now() AT TIME ZONE 'utc')::date
@@ -317,6 +319,7 @@ def get_visit(visit_id):
                 FROM visits v
                 JOIN patients p ON p.patient_id = v.patient_id
                 JOIN departments d ON d.dept_id = v.dept_id
+                LEFT JOIN staff s ON s.staff_id = v.assigned_staff
                 WHERE v.visit_id = %s
                 LIMIT 1;
                 """,
@@ -343,6 +346,8 @@ def get_visit(visit_id):
         "symptoms": row["symptoms"],
         "severity": row["severity"],
         "department": row["department_name"],
+        "assigned_staff_name": row["assigned_staff_name"],
+        "assigned_staff_role": row["assigned_staff_role"],
     }
 
     return jsonify({"visit": visit}), 200
@@ -378,21 +383,23 @@ def update_visit_status(visit_id):
 
             updates = { "status": new_status }
 
-            # If we go back to waiting, clear timers (nurse wasn't ready / patient sent back)
+            # If we go back to waiting, clear timers and assigned staff
             if new_status == "waiting":
                 updates["service_start"] = None
                 updates["service_end"] = None
+                updates["assigned_staff"] = None
 
             # When moving into in-progress, start service clock (if not already started)
             elif new_status == "in-progress" and current["service_start"] is None:
                 updates["service_start"] = now
-            
-            # When moving into completed, end service
+
+            # When moving into completed, end service and clear assigned staff
             elif new_status == "completed":
                 # If service_start was never set, set it now
                 if current["service_start"] is None:
                     updates["service_start"] = now
                 updates["service_end"] = now
+                updates["assigned_staff"] = None
 
             set_clauses = []
             params = []
@@ -426,7 +433,118 @@ def update_visit_status(visit_id):
         "service_start": row["service_start"].isoformat() if row["service_start"] else None,
         "service_end": row["service_end"].isoformat() if row["service_end"] else None,
     }), 200
-  
+
+@api_bp.patch("/visit/<visit_id>/assign")
+def assign_staff_to_visit(visit_id):
+    """Assign a staff member to a visit and update status to in-progress"""
+    if not request.is_json:
+        raise ApiError("Content-Type must be application/json", code=415)
+
+    data = request.get_json(silent=True) or {}
+    assigned_staff = data.get("assigned_staff")
+    new_status = data.get("status", "in-progress")
+
+    if not assigned_staff:
+        raise ApiError("assigned_staff is required", code=400)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Verify visit exists
+            cur.execute(
+                "SELECT visit_id, status, service_start FROM visits WHERE visit_id = %s",
+                (visit_id,)
+            )
+            current = cur.fetchone()
+            if not current:
+                raise ApiError(f"Visit not found: {visit_id}", code=404)
+
+            # Verify staff exists and is on duty
+            cur.execute(
+                """
+                SELECT s.staff_id, s.name, s.role, s.dept_id,
+                       EXISTS(
+                           SELECT 1 FROM staff_shifts sh
+                           WHERE sh.staff_id = s.staff_id AND sh.clock_out IS NULL
+                       ) as is_on_duty
+                FROM staff s
+                WHERE s.staff_id = %s
+                """,
+                (assigned_staff,)
+            )
+            staff = cur.fetchone()
+            if not staff:
+                raise ApiError(f"Staff member not found: {assigned_staff}", code=404)
+
+            if not staff["is_on_duty"]:
+                raise ApiError(f"Staff member {staff['name']} is not currently clocked in", code=400)
+
+            # Check if staff is already assigned to another active patient
+            cur.execute(
+                """
+                SELECT v.visit_id, p.full_name
+                FROM visits v
+                JOIN patients p ON p.patient_id = v.patient_id
+                WHERE v.assigned_staff = %s
+                  AND v.status = 'in-progress'
+                  AND v.visit_id != %s
+                LIMIT 1
+                """,
+                (assigned_staff, visit_id)
+            )
+            existing_assignment = cur.fetchone()
+            if existing_assignment:
+                raise ApiError(
+                    f"Staff member {staff['name']} is already assigned to another patient ({existing_assignment['full_name']})",
+                    code=400
+                )
+
+            now = datetime.now(timezone.utc)
+
+            # Update visit with assigned staff and status
+            updates = {
+                "assigned_staff": assigned_staff,
+                "status": new_status
+            }
+
+            # If moving to in-progress, start service clock
+            if new_status == "in-progress" and current["service_start"] is None:
+                updates["service_start"] = now
+
+            set_clause = ", ".join([f"{k} = %s" for k in updates.keys()])
+            values = list(updates.values()) + [visit_id]
+
+            cur.execute(
+                f"""
+                UPDATE visits
+                SET {set_clause}
+                WHERE visit_id = %s
+                RETURNING visit_id, status, assigned_staff, service_start, service_end
+                """,
+                tuple(values)
+            )
+            updated = cur.fetchone()
+            conn.commit()
+
+    # Emit WebSocket event
+    try:
+        socketio = get_socketio()
+        socketio.emit("visit_updated", {
+            "visit_id": visit_id,
+            "assigned_staff": assigned_staff,
+            "staff_name": staff["name"],
+            "status": new_status
+        })
+    except Exception as e:
+        print(f"Failed to emit visit_updated: {e}")
+
+    return jsonify({
+        "success": True,
+        "message": f"Assigned {staff['name']} to visit",
+        "visit_id": str(updated["visit_id"]),
+        "status": updated["status"],
+        "assigned_staff": updated["assigned_staff"]
+    }), 200
+
 # -----------------------------
 # MODEL LOADING
 # -----------------------------

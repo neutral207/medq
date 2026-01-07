@@ -12,9 +12,19 @@ CREATE TABLE IF NOT EXISTS departments (
 CREATE TABLE IF NOT EXISTS staff (
   staff_id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('nurse','physician','admin','tech')),
+  role TEXT NOT NULL CHECK (role IN ('nurse','physician','doctor')),
   dept_id INT REFERENCES departments(dept_id) ON UPDATE CASCADE,
   active BOOLEAN DEFAULT TRUE
+);
+
+-- Staff shifts table to track when staff clock in/out
+CREATE TABLE IF NOT EXISTS staff_shifts (
+  shift_id SERIAL PRIMARY KEY,
+  staff_id INT NOT NULL REFERENCES staff(staff_id) ON DELETE CASCADE,
+  dept_id INT NOT NULL REFERENCES departments(dept_id) ON UPDATE CASCADE,
+  clock_in TIMESTAMPTZ NOT NULL DEFAULT now(),
+  clock_out TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Patients
@@ -128,6 +138,15 @@ CREATE INDEX IF NOT EXISTS idx_patients_severity
 -- Staff by department and active flag
 CREATE INDEX IF NOT EXISTS idx_staff_dept_active
   ON staff (dept_id, active);
+
+-- Index for finding active shifts (no clock_out)
+CREATE INDEX IF NOT EXISTS idx_staff_shifts_active
+  ON staff_shifts (staff_id, dept_id)
+  WHERE clock_out IS NULL;
+
+-- Index for querying by department and time
+CREATE INDEX IF NOT EXISTS idx_staff_shifts_dept_time
+  ON staff_shifts (dept_id, clock_in, clock_out);
 
 -- Hourly aggregates are already primary keyed by (bucket_start, dept_id)
 -- but this helps when you filter by department first
