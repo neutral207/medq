@@ -94,6 +94,26 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS staff_auth (
+  staff_id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  full_name VARCHAR(100) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'staff',
+  dept_id INT REFERENCES departments(dept_id),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+INSERT INTO staff_auth (username, password_hash, full_name, role, is_active)
+VALUES(
+    'admin',
+    '$2b$10$rBV2cMhXYXq7gXGxHxLqCu8QZ3YYd5bP5FJjGxLqCu8QZ3YYd5bP5',
+    'System Admin',
+    'Administrator'
+    true
+);
+
 CREATE TABLE IF NOT EXISTS roles (
   role_id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL CHECK (name IN ('admin','staff','patient','it'))
