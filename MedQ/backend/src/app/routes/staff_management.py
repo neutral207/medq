@@ -1,16 +1,16 @@
 import os
+from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
 from src.app.errors import ApiError
 from datetime import datetime, timezone
 
+load_dotenv()
+
 staff_mgmt_bp = Blueprint("staff_management", __name__)
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/medq",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)

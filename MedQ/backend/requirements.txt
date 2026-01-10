@@ -14,3 +14,4 @@ bcrypt==5.0.0
 joblib
 pandas
 scikit-learn==1.7.1
+python-dotenv==1.0.0

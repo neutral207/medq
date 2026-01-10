@@ -1,22 +1,30 @@
 import os
 import jwt
 import bcrypt
+from dotenv import load_dotenv 
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Blueprint, request, jsonify
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+load_dotenv()
+
 auth_bp = Blueprint("auth", __name__)
 
-JWT_SECRET = os.getenv("JWT_SECRET", "our_secret_key_ here")
+JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_key_change_in_production")
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRY_HOURS = 8              # Length of shift
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/medq",
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if JWT_SECRET == "dev_secret_key_change_in_production":
+    import warnings
+    warnings.warn(
+        "Using default JWT secret! Set JWT_SECRET environment variable in production.",
+        UserWarning
+    )
+
 
 def get_conn():
     return psycopg2.connect(DATABASE_URL)

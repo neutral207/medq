@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
@@ -7,6 +8,8 @@ import joblib
 import pandas as pd
 from datetime import datetime, timezone
 
+load_dotenv()
+
 api_bp = Blueprint("api", __name__)
 
 # Import socketio for real-time updates
@@ -14,9 +17,7 @@ def get_socketio():
     from src.config.main import socketio
     return socketio
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/medq",
+DATABASE_URL = os.getenv("DATABASE_URL",
 )
 
 from datetime import datetime
