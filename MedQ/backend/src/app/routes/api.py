@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
 from src.app.errors import ApiError
+from src.app.routes.auth import token_required, role_required
 import joblib
 import pandas as pd
 from datetime import datetime, timezone
@@ -37,7 +38,12 @@ def get_conn():
     return psycopg2.connect(DATABASE_URL)
 
 @api_bp.get("/queue")
+@token_required
 def get_queue():
+    """
+    Get current queue (Requires: Any authenticated staff)
+    Access: All staff roles (nurse, doctor, physician, admin)
+    """
     department_name = request.args.get("department", "Emergency")
 
     # Optional: allow date filters
@@ -285,7 +291,12 @@ def check_in():
     return jsonify({"message": "checked in", "visit": visit}), 201
   
 @api_bp.get("/visit/<visit_id>")
+@token_required
 def get_visit(visit_id):
+    """
+    Get visit details (Requires: Any authenticated staff)
+    Access: All staff roles (nurse, doctor, physician, admin)
+    """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
@@ -354,7 +365,13 @@ def get_visit(visit_id):
     return jsonify({"visit": visit}), 200
   
 @api_bp.patch("/visit/<visit_id>/status")
+@token_required
+@role_required('nurse', 'doctor', 'physician', 'admin')
 def update_visit_status(visit_id):
+    """
+    Update visit status (Requires: Clinical staff or admin)
+    Access: nurse, doctor, physician, admin
+    """
     if not request.is_json:
         raise ApiError("Content-Type must be application/json", code=415)
     
@@ -436,8 +453,13 @@ def update_visit_status(visit_id):
     }), 200
 
 @api_bp.patch("/visit/<visit_id>/assign")
+@token_required
+@role_required('nurse', 'doctor', 'physician', 'admin')
 def assign_staff_to_visit(visit_id):
-    """Assign a staff member to a visit and update status to in-progress"""
+    """
+    Assign a staff member to a visit (Requires: Clinical staff or admin)
+    Access: nurse, doctor, physician, admin
+    """
     if not request.is_json:
         raise ApiError("Content-Type must be application/json", code=415)
 
@@ -610,7 +632,13 @@ def predict_wait():
 # -----------------------------
 
 @api_bp.get("/summary")
+@token_required
+@role_required('admin', 'doctor', 'physician')
 def summary():
+    """
+    Get summary statistics (Requires: Admin or clinical staff)
+    Access: admin, doctor, physician
+    """
     try:
         conn = get_db_conn()
         cur = conn.cursor()
@@ -671,7 +699,13 @@ def summary():
         return jsonify({"error": str(e)}), 500
 
 @api_bp.get("/wait_heatmap")
+@token_required
+@role_required('admin', 'doctor', 'physician')
 def wait_heatmap():
+    """
+    Get wait time heatmap data (Requires: Admin or clinical staff)
+    Access: admin, doctor, physician
+    """
     start_date = parse_date_param("start")
     end_date = parse_date_param("end")
     try:
@@ -739,7 +773,13 @@ DEPT_CAPACITY = {
 
 
 @api_bp.get("/staff_utilization")
+@token_required
+@role_required('admin', 'doctor', 'physician')
 def staff_utilization():
+    """
+    Get staff utilization metrics (Requires: Admin or clinical staff)
+    Access: admin, doctor, physician
+    """
     
     empty_payload = {"byDept": [], "history": []}
     start_date = parse_date_param("start")

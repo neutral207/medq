@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import TabSwitcher from "../components/TabSwitcher";
 import SummaryCardsRow from "../components/SummaryCardsRow";
 import WaitTimeHeatmap from "../components/WaitTimeHeatmap";
 import StaffUtilizationPanel from "../components/StaffUtilizationPanel";
 import { exportToCsv } from "../utils/exportCsv";
+import { apiRequest } from "../apiClient";
+import { hasPermission } from "../utils/permissions";
 
 export default function StaffAnalytics() {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState(null);
   const [heatmapData, setHeatmapData] = useState([]);
   const [staffUtilization, setStaffUtilization] = useState(null);
@@ -13,6 +17,14 @@ export default function StaffAnalytics() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+
+  // Check permission on mount
+  useEffect(() => {
+    if (!hasPermission('canViewAnalytics')) {
+      alert('You do not have permission to view Analytics. Redirecting to dashboard...');
+      navigate('/staff-dashboard');
+    }
+  }, [navigate]);
 
   const buildQueryString = () => {
     const params = new URLSearchParams();
@@ -26,15 +38,11 @@ export default function StaffAnalytics() {
     try {
       const qs = buildQueryString();
 
-      const [summaryRes, heatmapRes, staffRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/summary${qs}`),
-        fetch(`http://localhost:5000/api/wait_heatmap${qs}`),
-        fetch(`http://localhost:5000/api/staff_utilization${qs}`),
+      const [summaryData, heatmapJson, staffJson] = await Promise.all([
+        apiRequest(`/summary${qs}`),
+        apiRequest(`/wait_heatmap${qs}`),
+        apiRequest(`/staff_utilization${qs}`),
       ]);
-
-      const summaryData = await summaryRes.json();
-      const heatmapJson = await heatmapRes.json();
-      const staffJson = await staffRes.json();
 
       setMetrics({
         queueCount: summaryData.queueCount ?? 0,
@@ -76,9 +84,9 @@ export default function StaffAnalytics() {
         <TabSwitcher
           classname="mb-6"
           tabs={[
-            { label: "Board", to: "/staff-dashboard" },
-            { label: "Analytics", to: "/staff-analytics" },
-            { label: "Staff", to: "/staff-management" },
+            { label: "Board", to: "/staff-dashboard", permission: "canViewDashboard" },
+            { label: "Analytics", to: "/staff-analytics", permission: "canViewAnalytics" },
+            { label: "Staff", to: "/staff-management", permission: "canViewStaffManagement" },
           ]}
         />
 

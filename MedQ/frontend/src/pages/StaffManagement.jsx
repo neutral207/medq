@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../apiClient";
 import { useWebSocket } from "../contexts/WebSocketContext";
 import TabSwitcher from "../components/TabSwitcher";
+import { hasPermission } from "../utils/permissions";
 
 const ROLE_COLORS = {
   nurse: "bg-blue-500",
@@ -10,11 +12,20 @@ const ROLE_COLORS = {
 };
 
 export default function StaffManagement() {
+  const navigate = useNavigate();
   const { socket } = useWebSocket();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+
+  // Check permission on mount
+  useEffect(() => {
+    if (!hasPermission('canViewStaffManagement')) {
+      alert('You do not have permission to view Staff Management. Redirecting to dashboard...');
+      navigate('/staff-dashboard');
+    }
+  }, [navigate]);
 
   // Load staff data
   useEffect(() => {
@@ -127,9 +138,9 @@ export default function StaffManagement() {
         <div className="flex gap-3 section-margin">
           <TabSwitcher
             tabs={[
-              { label: "Board", to: "/staff-dashboard" },
-              { label: "Analytics", to: "/staff-analytics" },
-              { label: "Staff", to: "/staff-management" },
+              { label: "Board", to: "/staff-dashboard", permission: "canViewDashboard" },
+              { label: "Analytics", to: "/staff-analytics", permission: "canViewAnalytics" },
+              { label: "Staff", to: "/staff-management", permission: "canViewStaffManagement" },
             ]}
           />
 

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS departments (
 CREATE TABLE IF NOT EXISTS staff (
   staff_id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('nurse','physician','doctor')),
+  role TEXT NOT NULL CHECK (role IN ('nurse','physician','doctor','admin')),
   dept_id INT REFERENCES departments(dept_id) ON UPDATE CASCADE,
   active BOOLEAN DEFAULT TRUE
 );
@@ -105,14 +105,17 @@ CREATE TABLE IF NOT EXISTS staff_auth (
   created_at TIMESTAMP DEFAULT now()
 );
 
+-- Default admin user (password: "password123")
+-- Note: This is typically overwritten by seed.sql which creates all test users
 INSERT INTO staff_auth (username, password_hash, full_name, role, is_active)
 VALUES(
     'admin',
-    '$2b$10$rBV2cMhXYXq7gXGxHxLqCu8QZ3YYd5bP5FJjGxLqCu8QZ3YYd5bP5',
+    '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
     'System Admin',
-    'Administrator'
+    'admin',
     true
-);
+)
+ON CONFLICT (username) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS roles (
   role_id SERIAL PRIMARY KEY,
