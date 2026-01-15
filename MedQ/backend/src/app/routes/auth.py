@@ -123,9 +123,11 @@ def login():
                     sa.role,
                     sa.full_name,
                     sa.dept_id,
-                    s.staff_id
+                    s.staff_id,
+                    d.name as dept_name
                 FROM staff_auth sa
                 LEFT JOIN staff s ON s.name = sa.full_name
+                LEFT JOIN departments d ON d.dept_id = sa.dept_id
                 WHERE sa.username = %s AND sa.is_active = true;
                 """,
                 (username,)
@@ -164,7 +166,8 @@ def login():
             'username': staff['username'],
             'full_name': staff['full_name'],
             'role': staff['role'],
-            'dept_id': staff['dept_id']
+            'dept_id': staff['dept_id'],
+            'department': staff['dept_name']
         }
     }), 200
 

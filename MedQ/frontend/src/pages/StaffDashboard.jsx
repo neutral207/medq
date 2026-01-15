@@ -6,7 +6,7 @@ import { useWebSocket } from "../contexts/WebSocketContext";
 import AssignStaffModal from "../components/AssignStaffModal";
 import ClockInOutButton from "../components/ClockInOutButton";
 import { needsClockInOut } from "../utils/permissions";
-import { getCurrentUser } from "../utils/authApi";
+import { getCurrentUser, logout } from "../utils/authApi";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -356,7 +356,7 @@ export default function StaffDashboard() {
         {/* Title */}
         <header className="header-section">
           <div className="flex justify-between items-start mb-4">
-            <div>
+            <div className="flex-1">
               <h1 className="heading-1">Staff Dashboard</h1>
               <p className="subtitle">
                 Monitor and manage in real-time patient queue
@@ -365,13 +365,27 @@ export default function StaffDashboard() {
               {currentUser && (
                 <p className="text-sm text-slate-400 mt-2">
                   Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                  {currentUser.department && (
+                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                  )}
                 </p>
               )}
             </div>
-            {/* Clock In/Out Button - Only show for non-admin clinical staff */}
-            {needsClockInOut() && (
-              <ClockInOutButton onClockStatusChange={handleClockStatusChange} />
-            )}
+
+            <div className="flex items-start gap-3">
+              {/* Clock In/Out Button - Only show for non-admin clinical staff */}
+              {needsClockInOut() && (
+                <ClockInOutButton onClockStatusChange={handleClockStatusChange} />
+              )}
+
+              {/* Logout Button */}
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
