@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { apiRequest } from "../apiClient";
 import { useWebSocket } from "../contexts/WebSocketContext";
 import TabSwitcher from "../components/TabSwitcher";
+import { hasPermission } from "../utils/permissions";
+import { getCurrentUser, logout } from "../utils/authApi";
 
 const ROLE_COLORS = {
   nurse: "bg-blue-500",
@@ -10,11 +13,21 @@ const ROLE_COLORS = {
 };
 
 export default function StaffManagement() {
+  const navigate = useNavigate();
+  const currentUser = getCurrentUser();
   const { socket } = useWebSocket();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+
+  // Check permission on mount
+  useEffect(() => {
+    if (!hasPermission('canViewStaffManagement')) {
+      alert('You do not have permission to view Staff Management. Redirecting to dashboard...');
+      navigate('/staff-dashboard');
+    }
+  }, [navigate]);
 
   // Load staff data
   useEffect(() => {
@@ -118,18 +131,39 @@ export default function StaffManagement() {
     <div className="page-gradient flex justify-center">
       <main className="w-full container-staff">
         <header className="header-section">
-          <h1 className="heading-1">Staff Management</h1>
-          <p className="subtitle">
-            Track staff availability and manage shifts
-          </p>
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1">
+              <h1 className="heading-1">Staff Management</h1>
+              <p className="subtitle">
+                Track staff availability and manage shifts
+              </p>
+              {/* Logged in user display */}
+              {currentUser && (
+                <p className="text-sm text-slate-400 mt-2">
+                  Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                  {currentUser.department && (
+                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={logout}
+              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
+            >
+              Logout
+            </button>
+          </div>
         </header>
 
         <div className="flex gap-3 section-margin">
           <TabSwitcher
             tabs={[
-              { label: "Board", to: "/staff-dashboard" },
-              { label: "Analytics", to: "/staff-analytics" },
-              { label: "Staff", to: "/staff-management" },
+              { label: "Board", to: "/staff-dashboard", permission: "canViewDashboard" },
+              { label: "Analytics", to: "/staff-analytics", permission: "canViewAnalytics" },
+              { label: "Staff", to: "/staff-management", permission: "canViewStaffManagement" },
             ]}
           />
 

@@ -116,9 +116,19 @@ def login():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT staff_id, username, password_hash, role, full_name, dept_id
-                FROM staff_auth
-                WHERE username = %s AND is_active = true;
+                SELECT
+                    sa.staff_id as auth_id,
+                    sa.username,
+                    sa.password_hash,
+                    sa.role,
+                    sa.full_name,
+                    sa.dept_id,
+                    s.staff_id,
+                    d.name as dept_name
+                FROM staff_auth sa
+                LEFT JOIN staff s ON s.name = sa.full_name
+                LEFT JOIN departments d ON d.dept_id = sa.dept_id
+                WHERE sa.username = %s AND sa.is_active = true;
                 """,
                 (username,)
             )
@@ -156,7 +166,8 @@ def login():
             'username': staff['username'],
             'full_name': staff['full_name'],
             'role': staff['role'],
-            'dept_id': staff['dept_id']
+            'dept_id': staff['dept_id'],
+            'department': staff['dept_name']
         }
     }), 200
 
@@ -197,7 +208,7 @@ def register_staff():
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active,)
+                    INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
                     VALUES (%s, %s, %s, %s, %s, true)
                     RETURNING staff_id, username, full_name, role, dept_id
                     """,
@@ -279,7 +290,7 @@ def change_password():
     old_password = data.get('old_password', '')
     new_password = data.get('new_password', '')
 
-    if not old_password or new_password:
+    if not old_password or not new_password:
         return jsonify({'error': 'Old and new passwords required'}), 400
     
     if len(new_password) < 8:
@@ -305,7 +316,7 @@ def change_password():
 
     is_valid = bcrypt.checkpw(old_password.encode('utf-8'), password_hash)
     if not is_valid:
-        return jsonify({'error': 'Old password incorrect'}), 
+        return jsonify({'error': 'Old password incorrect'}), 401 
 
     # Hash new password
     new_password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())

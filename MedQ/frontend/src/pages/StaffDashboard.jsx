@@ -1,9 +1,12 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { apiRequest } from "../apiClient";
 import TabSwitcher from "../components/TabSwitcher";
 import { useWebSocket } from "../contexts/WebSocketContext";
 import AssignStaffModal from "../components/AssignStaffModal";
+import ClockInOutButton from "../components/ClockInOutButton";
+import { needsClockInOut } from "../utils/permissions";
+import { getCurrentUser, logout } from "../utils/authApi";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -84,6 +87,7 @@ export default function StaffDashboard() {
   const location = useLocation();
   const today = getTodayLocalISO();
   const { socket } = useWebSocket();
+  const currentUser = getCurrentUser();
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedDate, setSelectedDate] = useState(() => {
     // Always default to today's date on fresh load
@@ -117,21 +121,26 @@ export default function StaffDashboard() {
   const [error, setError] = useState("");
 
   // Load available on-duty staff (not currently assigned)
-  useEffect(() => {
-    async function loadStaff() {
-      try {
-        const url = department === "all"
-          ? "/staff/available"
-          : `/staff/available?department=${encodeURIComponent(department)}`;
-        const data = await apiRequest(url);
-        setAvailableStaff(data.staff || []);
-      } catch (err) {
-        console.error("Error loading staff:", err);
-      }
+  const loadAvailableStaff = useCallback(async () => {
+    try {
+      const url = department === "all"
+        ? "/staff/available"
+        : `/staff/available?department=${encodeURIComponent(department)}`;
+      const data = await apiRequest(url);
+      setAvailableStaff(data.staff || []);
+    } catch (err) {
+      console.error("Error loading staff:", err);
     }
+  }, [department]);
 
-    loadStaff();
-  }, [department, queue]); // Reload when queue changes
+  useEffect(() => {
+    loadAvailableStaff();
+  }, [department, queue, loadAvailableStaff]); // Reload when queue changes
+
+  // Callback for when clock status changes
+  const handleClockStatusChange = useCallback(() => {
+    loadAvailableStaff();
+  }, [loadAvailableStaff]);
 
   const filteredQueue = useMemo(() => {
     if (!selectedDate) return queue;
@@ -346,19 +355,47 @@ export default function StaffDashboard() {
       <main className="w-full container-staff">
         {/* Title */}
         <header className="header-section">
-          <h1 className="heading-1">Staff Dashboard</h1>
-          <p className="subtitle">
-            Monitor and manage in real-time patient queue
-          </p>
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1">
+              <h1 className="heading-1">Staff Dashboard</h1>
+              <p className="subtitle">
+                Monitor and manage in real-time patient queue
+              </p>
+              {/* Logged in user display */}
+              {currentUser && (
+                <p className="text-sm text-slate-400 mt-2">
+                  Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                  {currentUser.department && (
+                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-start gap-3">
+              {/* Clock In/Out Button - Only show for non-admin clinical staff */}
+              {needsClockInOut() && (
+                <ClockInOutButton onClockStatusChange={handleClockStatusChange} />
+              )}
+
+              {/* Logout Button */}
+              <button
+                onClick={logout}
+                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
         </header>
 
         {/* Row 1: Board / Analytics / Staff */}
         <TabSwitcher
           className="mb-4"
           tabs={[
-            { label: "Board", to: "/staff-dashboard" },
-            { label: "Analytics", to: "/staff-analytics" },
-            { label: "Staff", to: "/staff-management" },
+            { label: "Board", to: "/staff-dashboard", permission: "canViewDashboard" },
+            { label: "Analytics", to: "/staff-analytics", permission: "canViewAnalytics" },
+            { label: "Staff", to: "/staff-management", permission: "canViewStaffManagement" },
           ]}
         />
 

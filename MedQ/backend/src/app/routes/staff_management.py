@@ -4,6 +4,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
 from src.app.errors import ApiError
+from src.app.routes.auth import token_required, role_required
 from datetime import datetime, timezone
 
 load_dotenv()
@@ -20,8 +21,13 @@ def get_socketio():
     return socketio
 
 @staff_mgmt_bp.get("/staff")
+@token_required
+@role_required('admin')
 def get_all_staff():
-    """Get all staff members with their current shift status"""
+    """
+    Get all staff members with their current shift status (Requires: Admin only)
+    Access: admin
+    """
     department_filter = request.args.get("department")
 
     with get_conn() as conn:
@@ -75,8 +81,13 @@ def get_all_staff():
     return jsonify({"staff": staff_list}), 200
 
 @staff_mgmt_bp.post("/staff/<int:staff_id>/clock-in")
+@token_required
+@role_required('nurse', 'doctor', 'physician', 'admin')
 def clock_in_staff(staff_id):
-    """Clock in a staff member"""
+    """
+    Clock in a staff member (Requires: Clinical staff or admin)
+    Access: nurse, doctor, physician, admin
+    """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Check if staff exists and get their department
@@ -135,8 +146,13 @@ def clock_in_staff(staff_id):
     }), 201
 
 @staff_mgmt_bp.post("/staff/<int:staff_id>/clock-out")
+@token_required
+@role_required('nurse', 'doctor', 'physician', 'admin')
 def clock_out_staff(staff_id):
-    """Clock out a staff member"""
+    """
+    Clock out a staff member (Requires: Clinical staff or admin)
+    Access: nurse, doctor, physician, admin
+    """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get staff info
@@ -195,8 +211,12 @@ def clock_out_staff(staff_id):
     }), 200
 
 @staff_mgmt_bp.get("/staff/on-duty")
+@token_required
 def get_on_duty_staff():
-    """Get count of staff currently on duty by department"""
+    """
+    Get count of staff currently on duty by department (Requires: Any authenticated staff)
+    Access: All staff roles
+    """
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -224,8 +244,13 @@ def get_on_duty_staff():
     return jsonify({"departments": departments}), 200
 
 @staff_mgmt_bp.get("/staff/available")
+@token_required
+@role_required('nurse', 'doctor', 'physician', 'admin')
 def get_available_staff():
-    """Get staff who are on duty and not currently assigned to another patient"""
+    """
+    Get staff who are on duty and not currently assigned (Requires: Clinical staff or admin)
+    Access: nurse, doctor, physician, admin
+    """
     department_filter = request.args.get("department")
 
     with get_conn() as conn:
