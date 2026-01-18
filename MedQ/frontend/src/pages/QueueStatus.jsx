@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
-import { apiRequest } from "../apiClient";
 import { useWebSocket } from "../contexts/WebSocketContext";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
 
 export default function QueueStatus() {
   const location = useLocation();
@@ -66,15 +67,24 @@ export default function QueueStatus() {
     return "Unknown";
   }
 
-  // Initial fetch of visit data
+  // Initial fetch of visit data using public endpoint
   useEffect(() => {
-    if (!visitId) return;
+    if (!visitId || !anonToken) return;
 
     const fetchVisit = async () => {
       setStatusError("");
 
       try {
-        const data = await apiRequest(`/visit/${visitId}`);
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to fetch visit status");
+        }
+
+        const data = await response.json();
         const visit = data?.visit;
 
         if (!visit) {
@@ -102,17 +112,23 @@ export default function QueueStatus() {
     };
 
     fetchVisit();
-  }, [visitId]);
+  }, [visitId, anonToken]);
 
   // WebSocket real-time updates
   useEffect(() => {
-    if (!socket || !visitId) return;
+    if (!socket || !visitId || !anonToken) return;
 
-    const handleQueueUpdate = async (data) => {
-      // Reload visit data when queue updates
+    const handleQueueUpdate = async () => {
+      // Reload visit data when queue updates using public endpoint
       try {
-        const response = await apiRequest(`/visit/${visitId}`);
-        const visit = response?.visit;
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const visit = data?.visit;
 
         if (visit) {
           const qp = visit.queue_position ?? visit.queuePosition ?? null;
@@ -135,7 +151,7 @@ export default function QueueStatus() {
     return () => {
       socket.off("queue_update", handleQueueUpdate);
     };
-  }, [socket, visitId]);
+  }, [socket, visitId, anonToken]);
 
   const handleBackToCheckIn = () => {
   window.location.href = "http://localhost:3000/patient-checkin";

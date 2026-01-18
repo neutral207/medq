@@ -77,78 +77,57 @@ export default function PatientCheckIn() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-
-  const chosenReason =
-    formData.reason === "Other"
-      ? formData.customReason
-      : formData.reason;
-
-  const { department, severity } =
-    assignDeptAndSeverity(chosenReason);
-
-  const payload = {
-    name: formData.name,
-    dob: formData.dob,
-    symptoms: chosenReason,
-    phone: formData.phone,
-    department,
-    severity,
-  };
-
-  const response = await fetch("/api/checkin", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
+    e.preventDefault();
     setLoading(true);
+    setError("");
 
     try {
       const chosenReason =
-  formData.reason === "Other"
-    ? formData.customReason
-    : formData.reason;
+        formData.reason === "Other"
+          ? formData.customReason
+          : formData.reason;
 
-const { department, severity } =
-  assignDeptAndSeverity(chosenReason);
+      const { department, severity } = assignDeptAndSeverity(chosenReason);
 
-const payload = {
-  name: formData.name,
-  dob: formData.dob,
-  symptoms: chosenReason,
-  phone: formData.phone,
-  department,
-  severity,
-};
+      const payload = {
+        name: formData.name,
+        dob: formData.dob,
+        symptoms: chosenReason,
+        phone: formData.phone,
+        department,
+        severity,
+      };
 
-      const data = await apiRequest("/checkin", {
+      // Use direct fetch to avoid auth redirect for public endpoint
+      const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
+      const response = await fetch(`${API_BASE}/checkin`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to check in");
+      }
+
+      const data = await response.json();
       const { visit } = data;
+
       if (!visit) {
         throw new Error("Missing 'visit' field.");
       }
 
-      const {
-        visit_id,
-        anon_token,
-        predicted_wait_minutes,
-        department: deptFromServer,
-      } = visit;
-
       navigate("/queue-status", {
-  state: {
-    visitId: data.visit.visit_id,
-    anonToken: data.visit.anon_token,
-    department: data.visit.department,
-    initialWait: data.visit.predicted_wait_minutes,
-    severity: data.visit.severity,
-    queuePosition: data.visit.queue_position,
-  },
-});
+        state: {
+          visitId: visit.visit_id,
+          anonToken: visit.anon_token,
+          department: visit.department,
+          initialWait: visit.predicted_wait_minutes,
+          severity: visit.severity,
+          queuePosition: visit.queue_position,
+        },
+      });
     } catch (err) {
       console.error(err);
       setError(err.message || "Error submitting check-in.");

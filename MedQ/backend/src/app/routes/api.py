@@ -363,7 +363,70 @@ def get_visit(visit_id):
     }
 
     return jsonify({"visit": visit}), 200
-  
+
+
+@api_bp.get("/visit/<visit_id>/public")
+def get_visit_public(visit_id):
+    """
+    Public endpoint for patients to check their queue status.
+    No authentication required, but requires anon_token query parameter for verification.
+    Returns limited information (no PII like full name, DOB, phone).
+
+    GET /api/visit/<visit_id>/public?token=<anon_token>
+    """
+    anon_token = request.args.get("token", "").strip()
+
+    if not anon_token:
+        raise ApiError("Token parameter is required", code=400)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    v.visit_id,
+                    v.checkin_time,
+                    v.status,
+                    v.predicted_wait_minutes,
+                    p.anon_token,
+                    p.severity,
+                    d.name AS department_name,
+                    (
+                        SELECT COUNT(*)
+                        FROM visits v2
+                        WHERE v2.dept_id = v.dept_id
+                          AND v2.status = 'waiting'
+                          AND v2.checkin_time IS NOT NULL
+                          AND v.checkin_time IS NOT NULL
+                          AND (v2.checkin_time AT TIME ZONE 'utc')::date = (now() AT TIME ZONE 'utc')::date
+                          AND v2.checkin_time <= v.checkin_time
+                    ) AS queue_position
+                FROM visits v
+                JOIN patients p ON p.patient_id = v.patient_id
+                JOIN departments d ON d.dept_id = v.dept_id
+                WHERE v.visit_id = %s AND p.anon_token = %s
+                LIMIT 1;
+                """,
+                (visit_id, anon_token),
+            )
+            row = cur.fetchone()
+
+    if not row:
+        raise ApiError("Visit not found or invalid token", code=404)
+
+    visit = {
+        "visit_id": str(row["visit_id"]),
+        "status": row["status"],
+        "checkin_time": row["checkin_time"].isoformat() if row["checkin_time"] else None,
+        "predicted_wait_minutes": row["predicted_wait_minutes"],
+        "queue_position": int(row["queue_position"]) if row["queue_position"] is not None else None,
+        "severity": row["severity"],
+        "department": row["department_name"],
+    }
+
+    return jsonify({"visit": visit}), 200
+
+
 @api_bp.patch("/visit/<visit_id>/status")
 @token_required
 @role_required('nurse', 'doctor', 'physician', 'admin')
