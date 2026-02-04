@@ -464,8 +464,9 @@ def update_visit_status(visit_id):
 
             updates = { "status": new_status }
 
-            # If we go back to waiting, clear timers and assigned staff
+            # If we go back to waiting, reset timers and assigned staff
             if new_status == "waiting":
+                updates["checkin_time"] = now
                 updates["service_start"] = None
                 updates["service_end"] = None
                 updates["assigned_staff"] = None
@@ -705,45 +706,53 @@ def summary():
         conn = get_db_conn()
         cur = conn.cursor()
 
-        # 1. Queue count
+        # 1. Queue count (patients currently waiting)
         cur.execute("""
             SELECT COUNT(*) AS queue_count
             FROM visits
-            WHERE status = 'queued';
+            WHERE status = 'waiting';
         """)
         queue_count = cur.fetchone()["queue_count"]
 
-        # 2. Average completed wait time today
+        # 2. Average wait time for completed visits today
         cur.execute("""
-            SELECT AVG(actual_wait_minutes) AS avg_wait
+            SELECT AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60) AS avg_wait
             FROM visits
             WHERE status = 'completed'
+              AND service_start IS NOT NULL
               AND checkin_time::date = CURRENT_DATE;
         """)
         row = cur.fetchone()
         avg_wait = row["avg_wait"] or 0
 
-        # 3. Staff currently in service
+        # 3. Staff currently assigned to in-progress visits
         cur.execute("""
             SELECT COUNT(DISTINCT assigned_staff) AS active_staff
             FROM visits
-            WHERE status = 'in_service'
+            WHERE status = 'in-progress'
               AND assigned_staff IS NOT NULL;
         """)
         active_staff = cur.fetchone()["active_staff"]
 
-        # 4. Hourly history for charts
+        # 4. Hourly history for charts (from actual visits)
         cur.execute("""
-            SELECT bucket_start, arrivals, avg_wait_minutes, in_service
-            FROM wait_time_agg_hourly
+            SELECT
+                date_trunc('hour', checkin_time) AS bucket_start,
+                COUNT(*) AS arrivals,
+                AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60)
+                    FILTER (WHERE service_start IS NOT NULL) AS avg_wait_minutes,
+                COUNT(DISTINCT assigned_staff)
+                    FILTER (WHERE status = 'in-progress') AS in_service
+            FROM visits
+            GROUP BY bucket_start
             ORDER BY bucket_start DESC
             LIMIT 6;
         """)
         rows = list(reversed(cur.fetchall()))
 
-        queue_history = [r["arrivals"] for r in rows]
-        avg_wait_history = [r["avg_wait_minutes"] for r in rows]
-        staff_load_history = [r["in_service"] for r in rows]
+        queue_history = [int(r["arrivals"]) for r in rows]
+        avg_wait_history = [round(float(r["avg_wait_minutes"] or 0), 1) for r in rows]
+        staff_load_history = [int(r["in_service"]) for r in rows]
 
         cur.close()
         conn.close()
@@ -770,59 +779,50 @@ def wait_heatmap():
     """
     start_date = parse_date_param("start")
     end_date = parse_date_param("end")
+    tz = request.args.get("tz", "UTC").strip()
     try:
         conn = get_db_conn()
         cur = conn.cursor()
 
-        # Use bucket_start from your aggregate table
-        cur.execute("""
+        # Query completed visits directly for real-time heatmap data
+        where_clauses = ["service_start IS NOT NULL"]
+        params = [tz, tz]  # for the two AT TIME ZONE conversions
+
+        if start_date:
+            where_clauses.append("checkin_time::date >= %s")
+            params.append(start_date)
+        if end_date:
+            where_clauses.append("checkin_time::date <= %s")
+            params.append(end_date)
+
+        where_sql = " AND ".join(where_clauses)
+
+        cur.execute(f"""
             SELECT
-                EXTRACT(DOW FROM bucket_start) AS day_of_week,
-                EXTRACT(HOUR FROM bucket_start) AS hour,
-                AVG(avg_wait_minutes) AS avg_wait
-            FROM wait_time_agg_hourly
+                EXTRACT(DOW FROM checkin_time AT TIME ZONE %s) AS day_of_week,
+                EXTRACT(HOUR FROM checkin_time AT TIME ZONE %s) AS hour,
+                AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60) AS avg_wait
+            FROM visits
+            WHERE {where_sql}
             GROUP BY day_of_week, hour
             ORDER BY day_of_week, hour;
-        """)
+        """, tuple(params))
 
         rows = cur.fetchall()
         cur.close()
         conn.close()
 
-        # If there is no data yet, return a synthetic grid so the heatmap still draws
         if not rows:
-            synthetic = [
-                {
-                    "day_of_week": d,
-                    "hour": h,
-                    "avg_wait": ((d * 7 + h * 2) % 50) + 5
-                }
-                for d in range(7)
-                for h in range(24)
-            ]
-            return jsonify(synthetic)
+            return jsonify([])
 
         return jsonify([
             {
                 "day_of_week": int(r["day_of_week"]),
                 "hour": int(r["hour"]),
-                "avg_wait": float(r["avg_wait"]),
+                "avg_wait": round(float(r["avg_wait"]), 1),
             }
             for r in rows
         ])
-
-    except psycopg2.errors.UndefinedTable:
-        # wait_time_agg_hourly does not exist yet -> return synthetic data
-        synthetic = [
-            {
-                "day_of_week": d,
-                "hour": h,
-                "avg_wait": ((d * 7 + h * 2) % 50) + 5
-            }
-            for d in range(7)
-            for h in range(24)
-        ]
-        return jsonify(synthetic), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

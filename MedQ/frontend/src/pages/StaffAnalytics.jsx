@@ -32,6 +32,7 @@ export default function StaffAnalytics() {
     const params = new URLSearchParams();
     if (startDate) params.append("start", startDate);
     if (endDate) params.append("end", endDate);
+    params.append("tz", Intl.DateTimeFormat().resolvedOptions().timeZone);
     const qs = params.toString();
     return qs ? `?${qs}` : "";
   };
