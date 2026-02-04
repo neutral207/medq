@@ -9,9 +9,15 @@ html, body, #root {
   font-family: 'Ubuntu', sans-serif;
 }
 
-/* Custom date picker icon color */
-input[type="date"]::-webkit-calendar-picker-indicator {
+/* Custom date picker icon color - dark mode */
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(55%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(99%) contrast(93%);
+  cursor: pointer;
+}
+
+/* Custom date picker icon color - light mode */
+.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(20%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(80%) contrast(93%);
   cursor: pointer;
 }
 
@@ -127,8 +133,156 @@ button:focus {
 
   /* Layout */
   .page-gradient {
-    @apply min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white;
+    @apply min-h-screen text-white;
   }
+}
+
+/* Theme-specific styles */
+.dark .page-gradient {
+  @apply bg-gradient-to-b from-medqDark to-medqDeep;
+}
+
+.light .page-gradient {
+  @apply bg-gradient-to-b from-indigo-100 via-purple-50 to-slate-100 text-medqLightText;
+}
+
+.dark .card-standard {
+  @apply bg-[#2D3047];
+}
+
+.light .card-standard {
+  @apply bg-white border border-slate-200 shadow-lg;
+}
+
+.dark .select-standard {
+  @apply bg-[#2D3047] border-slate-600/70 text-white;
+}
+
+.light .select-standard {
+  @apply bg-white border-slate-300 text-medqLightText;
+}
+
+.dark .input-date {
+  @apply bg-[#2D3047] border-slate-600/70 text-white;
+}
+
+.light .input-date {
+  @apply bg-white border-slate-300 text-medqLightText;
+}
+
+.dark .input-standard {
+  @apply bg-transparent border-white/30 text-white placeholder-white/50;
+}
+
+.light .input-standard {
+  @apply bg-white border-slate-300 text-medqLightText placeholder-slate-400;
+}
+
+.dark .card-modal {
+  @apply bg-[#2D3047];
+}
+
+.light .card-modal {
+  @apply bg-white border border-slate-200;
+}
+
+.dark .subtitle {
+  @apply text-slate-300;
+}
+
+.light .subtitle {
+  @apply text-medqLightMuted;
+}
+
+.dark .text-empty {
+  @apply text-slate-400;
+}
+
+.light .text-empty {
+  @apply text-slate-500;
+}
+
+/* Form input for patient-facing pages */
+.dark .input-form {
+  @apply bg-transparent border-white/30 text-white placeholder-white/50;
+}
+
+.light .input-form {
+  @apply bg-white border-slate-300 text-medqLightText placeholder-slate-400;
+}
+
+/* Button styles for light mode */
+.dark .btn-small {
+  @apply border-slate-400/70 hover:bg-slate-600/80 text-white;
+}
+
+.light .btn-small {
+  @apply border-slate-300 hover:bg-slate-100 text-medqLightText;
+}
+
+/* Card info for queue status */
+.dark .card-info {
+  @apply bg-white/10 border-white/10;
+}
+
+.light .card-info {
+  @apply bg-white border-slate-200 shadow-lg;
+}
+
+/* Logout button for both themes */
+.dark .btn-logout {
+  @apply bg-red-500/20 hover:bg-red-500/30 text-red-200 border-red-500/50;
+}
+
+.light .btn-logout {
+  @apply bg-red-50 hover:bg-red-100 text-red-600 border-red-300;
+}
+
+/* User info text for both themes */
+.dark .text-muted {
+  @apply text-slate-400;
+}
+
+.light .text-muted {
+  @apply text-slate-600;
+}
+
+/* Highlighted text within muted context */
+.dark .text-highlight {
+  @apply text-slate-300;
+}
+
+.light .text-highlight {
+  @apply text-slate-700;
+}
+
+/* Utilization card backgrounds */
+.dark .utilization-card {
+  @apply bg-slate-700/50;
+}
+
+.light .utilization-card {
+  @apply bg-slate-100;
+}
+
+/* Summary card styling */
+.dark .summary-card {
+  @apply bg-[#2D3047] shadow-md;
+}
+
+.light .summary-card {
+  @apply bg-white shadow-md;
+}
+
+.dark .summary-value {
+  @apply text-white;
+}
+
+.light .summary-value {
+  @apply text-slate-800;
+}
+
+@layer components {
 
   .header-section {
     @apply mb-8;

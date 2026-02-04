@@ -4,20 +4,11 @@ import "../charts/chartConfig";
 
 function SummaryCard({ title, value, suffix, chartData }) {
   return (
-    <div style={{
-      borderRadius: "12px",
-      padding: "16px",
-      backgroundColor: "#ffffff",
-      boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-      display: "flex",
-      flexDirection: "column",
-      gap: "8px",
-      minWidth: "220px"
-    }}>
-      <div style={{ fontSize: "14px", color: "#555" }}>{title}</div>
-      <div style={{ fontSize: "28px", fontWeight: "600" }}>
+    <div className="rounded-xl p-4 summary-card flex flex-col gap-2 min-w-[220px]">
+      <div className="text-sm text-muted">{title}</div>
+      <div className="text-3xl font-semibold summary-value">
         {value}
-        {suffix ? <span style={{ fontSize: "14px", marginLeft: "4px" }}>{suffix}</span> : null}
+        {suffix ? <span className="text-sm ml-1">{suffix}</span> : null}
       </div>
       <div style={{ height: "80px" }}>
         <Line

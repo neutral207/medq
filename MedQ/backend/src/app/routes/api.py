@@ -474,13 +474,12 @@ def update_visit_status(visit_id):
             elif new_status == "in-progress" and current["service_start"] is None:
                 updates["service_start"] = now
 
-            # When moving into completed, end service and clear assigned staff
+            # When moving into completed, end service (keep assigned_staff for metrics)
             elif new_status == "completed":
                 # If service_start was never set, set it now
                 if current["service_start"] is None:
                     updates["service_start"] = now
                 updates["service_end"] = now
-                updates["assigned_staff"] = None
 
             set_clauses = []
             params = []
@@ -828,85 +827,76 @@ def wait_heatmap():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-DEPT_CAPACITY = {
-    1: 10,  # Emergency
-    2: 8,   # Radiology
-    3: 6,   # Pediatrics
-}
 
-
-@api_bp.get("/staff_utilization")
+@api_bp.get("/staff_performance")
 @token_required
 @role_required('admin', 'doctor', 'physician')
-def staff_utilization():
+def staff_performance():
     """
-    Get staff utilization metrics (Requires: Admin or clinical staff)
+    Get accumulated service time per staff member (Requires: Admin or senior clinical staff)
     Access: admin, doctor, physician
+
+    Returns staff metrics including total visits, total service time, and average service time.
     """
-    
-    empty_payload = {"byDept": [], "history": []}
     start_date = parse_date_param("start")
     end_date = parse_date_param("end")
+    department = request.args.get("department", "").strip()
 
-    try:
-        try:
-            conn = get_db_conn()
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT bucket_start, dept_id, COALESCE(in_service, 0) AS in_service
-                FROM wait_time_agg_hourly
-                ORDER BY bucket_start DESC
-                LIMIT 24;
-            """)
-            rows = cur.fetchall()
-            cur.close()
-            conn.close()
-        except Exception:
-            rows = []
+    # Build WHERE clauses for visits with completed service
+    where_clauses = ["v.service_start IS NOT NULL", "v.service_end IS NOT NULL"]
+    params = []
 
-        if not rows:
-            return jsonify(empty_payload), 200
+    if start_date:
+        where_clauses.append("v.service_start::date >= %s")
+        params.append(start_date)
+    if end_date:
+        where_clauses.append("v.service_end::date <= %s")
+        params.append(end_date)
+    if department and department.lower() != "all":
+        where_clauses.append("d.name = %s")
+        params.append(department)
 
-        latest_by_dept = {}
-        for r in rows:
-            did = r["dept_id"]
-            if did not in latest_by_dept or r["bucket_start"] > latest_by_dept[did]["bucket_start"]:
-                latest_by_dept[did] = r
+    where_sql = " AND ".join(where_clauses)
 
-        by_dept_payload = []
-        for did, latest in latest_by_dept.items():
-            in_serv = latest["in_service"] or 0
-            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))  
-            util = float(in_serv) / capacity if capacity else 0.0
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get staff performance metrics
+            cur.execute(
+                f"""
+                SELECT
+                    s.staff_id,
+                    s.name AS staff_name,
+                    s.role,
+                    d.name AS department_name,
+                    COUNT(v.visit_id) AS total_visits,
+                    COALESCE(SUM(EXTRACT(EPOCH FROM (v.service_end - v.service_start)) / 60), 0) AS total_service_minutes,
+                    COALESCE(AVG(EXTRACT(EPOCH FROM (v.service_end - v.service_start)) / 60), 0) AS avg_service_minutes
+                FROM staff s
+                LEFT JOIN departments d ON d.dept_id = s.dept_id
+                LEFT JOIN visits v ON v.assigned_staff = s.staff_id
+                    AND {where_sql}
+                WHERE s.role IN ('nurse', 'doctor', 'physician')
+                GROUP BY s.staff_id, s.name, s.role, d.name
+                ORDER BY total_service_minutes DESC;
+                """,
+                tuple(params) if params else None,
+            )
+            staff_rows = cur.fetchall()
 
-            by_dept_payload.append({
-                "deptId": did,
-                "deptName": f"Dept {did}",
-                "activeStaff": capacity,
-                "inService": int(in_serv),
-                "utilization": round(util, 2),
-            })
+    # Format staff metrics
+    staff_metrics = []
+    for row in staff_rows:
+        staff_metrics.append({
+            "staffId": row["staff_id"],
+            "name": row["staff_name"],
+            "role": row["role"],
+            "department": row["department_name"],
+            "totalVisits": int(row["total_visits"]),
+            "totalServiceMinutes": round(float(row["total_service_minutes"]), 1),
+            "avgServiceMinutes": round(float(row["avg_service_minutes"]), 1),
+        })
 
-        history_payload = []
-        for r in rows:
-            did = r["dept_id"]
-            in_serv = r["in_service"] or 0
-            capacity = DEPT_CAPACITY.get(did, max(in_serv, 1))
-            util = float(in_serv) / capacity if capacity else 0.0
+    return jsonify({
+        "staffMetrics": staff_metrics,
+    }), 200
 
-            bucket_start = r["bucket_start"]
-            if hasattr(bucket_start, "isoformat"):
-                bucket_start = bucket_start.isoformat()
-
-            history_payload.append({
-                "bucketStart": bucket_start,
-                "deptId": did,
-                "inService": int(in_serv),
-                "activeStaff": capacity,
-                "utilization": round(util, 2),
-            })
-
-        return jsonify({"byDept": by_dept_payload, "history": history_payload}), 200
-
-    except Exception:
-        return jsonify(empty_payload), 200

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
 import { useWebSocket } from "../contexts/WebSocketContext";
+import ThemeToggle from "../components/ThemeToggle";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
 
@@ -159,10 +160,15 @@ export default function QueueStatus() {
 
   if (!visitId) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+      <div className="page-gradient flex justify-center relative">
+        {/* Theme Toggle - Top Right */}
+        <div className="absolute top-4 right-4 z-10">
+          <ThemeToggle />
+        </div>
+
         <main className="w-full max-w-3xl px-6 py-10">
           <h1 className="text-3xl font-bold mb-2">Queue Status</h1>
-          <p className="text-slate-300">No visit information found. Please check in again.</p>
+          <p className="subtitle">No visit information found. Please check in again.</p>
 
           <button
             onClick={handleBackToCheckIn}
@@ -176,25 +182,30 @@ export default function QueueStatus() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+    <div className="page-gradient flex justify-center relative">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
+
       <main className="w-full max-w-3xl px-6 py-10">
         <header className="mb-8 flex items-center gap-3">
           <img src={medqLogo} alt="MedQ" className="h-10 w-10" />
           <div>
             <h1 className="text-4xl font-bold">Queue Status</h1>
-            <p className="text-slate-300 text-sm mt-1">Track your position and estimated wait time</p>
+            <p className="subtitle">Track your position and estimated wait time</p>
           </div>
         </header>
 
-        <div className="bg-white/10 border border-white/10 rounded-2xl p-6 shadow-sm">
+        <div className="card-info rounded-2xl p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <div className="text-slate-300 text-xs">Department</div>
+              <div className="subtitle text-xs !mt-0">Department</div>
               <div className="text-lg font-semibold mt-1">{department || "Unknown"}</div>
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Urgency</div>
+              <div className="subtitle text-xs !mt-0">Urgency</div>
               <div className="text-lg font-semibold mt-1">
                 {severityLabel(severity)}
                 {severity != null ? ` (Severity ${severity})` : ""}
@@ -202,26 +213,26 @@ export default function QueueStatus() {
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Your Queue Number</div>
+              <div className="subtitle text-xs !mt-0">Your Queue Number</div>
               <div className="text-3xl font-bold mt-1">
                 {queuePosition != null ? queuePosition : "Loading..."}
               </div>
-              {statusError ? <div className="text-sm text-red-300 mt-2">{statusError}</div> : null}
+              {statusError ? <div className="text-sm text-red-500 mt-2">{statusError}</div> : null}
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Estimated Time Remaining</div>
+              <div className="subtitle text-xs !mt-0">Estimated Time Remaining</div>
               <div className="text-3xl font-bold mt-1">
                 {estWaitMinutes != null ? formatTime(secondsLeft) : "Calculating..."}
               </div>
-              <div className="text-slate-300 text-xs mt-2">
+              <div className="subtitle text-xs mt-2">
                 {lastUpdated ? `Last updated: ${lastUpdated}` : ""}
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="text-slate-300 text-xs">Tracking Token</div>
+          <div className="mt-6 pt-6 border-t border-current/10">
+            <div className="subtitle text-xs !mt-0">Tracking Token</div>
             <div className="font-mono text-sm mt-1 break-all">{anonToken || "N/A"}</div>
           </div>
         </div>

@@ -7,6 +7,7 @@ import AssignStaffModal from "../components/AssignStaffModal";
 import ClockInOutButton from "../components/ClockInOutButton";
 import { needsClockInOut } from "../utils/permissions";
 import { getCurrentUser, logout } from "../utils/authApi";
+import ThemeToggle from "../components/ThemeToggle";
 
 const STORAGE_KEY_DATE = "medq.staffDashboard.selectedDate";
 
@@ -15,6 +16,13 @@ const STATUS_COLORS = {
   "in-progress": "bg-cyan-400",
   "completed": "bg-green-400",
 };
+
+const STAFF_ROLES = [
+  { value: "all", label: "All Roles" },
+  { value: "nurse", label: "Nurses" },
+  { value: "doctor", label: "Doctors" },
+  { value: "physician", label: "Physicians" },
+];
 
 const DEPARTMENTS = [
   { value: "all", label: "All Departments" },
@@ -38,6 +46,55 @@ function getNextStatus(currentStatus, label) {
   return currentStatus;
 }
 
+// Countdown timer component for displaying remaining wait time
+function CountdownTimer({ checkinTime, predictedWaitMinutes }) {
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    const calculateSecondsLeft = () => {
+      const mins = Number(predictedWaitMinutes);
+      if (!Number.isFinite(mins) || mins <= 0) return 0;
+
+      if (checkinTime) {
+        const checkinDate = new Date(checkinTime);
+        const now = new Date();
+        const elapsedMinutes = (now - checkinDate) / 1000 / 60;
+        const remainingMinutes = Math.max(0, mins - elapsedMinutes);
+        return Math.round(remainingMinutes * 60);
+      }
+
+      return Math.round(mins * 60);
+    };
+
+    setSecondsLeft(calculateSecondsLeft());
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [checkinTime, predictedWaitMinutes]);
+
+  const formatTime = (totalSeconds) => {
+    const s = Math.max(0, Number(totalSeconds) || 0);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  };
+
+  if (predictedWaitMinutes == null) {
+    return <span className="text-slate-400">-</span>;
+  }
+
+  const isOverdue = secondsLeft === 0 && predictedWaitMinutes > 0;
+
+  return (
+    <span className={`font-mono ${isOverdue ? "text-red-400" : "text-emerald-400"}`}>
+      {isOverdue ? "00:00 (overdue)" : formatTime(secondsLeft)}
+    </span>
+  );
+}
+
 function QueueCard({ item, actions, onViewDetails, onAction }) {
   const dotColor = STATUS_COLORS[item.status] || "bg-slate-400";
 
@@ -47,8 +104,18 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
         <span className={`w-3 h-3 rounded-full mt-1 ${dotColor}`} />
         <div className="flex-1">
           <h3 className="heading-3 mb-1">{item.name}</h3>
-          <p className="text-body text-slate-300">Department: {item.dept}</p>
-          <p className="text-small text-slate-400 mt-1">ETA: {item.eta}</p>
+          <p className="text-body text-muted">Department: {item.dept}</p>
+          <p className="text-small text-muted mt-1">
+            ETA:{" "}
+            {item.status === "waiting" ? (
+              <CountdownTimer
+                checkinTime={item.checkinTime}
+                predictedWaitMinutes={item.predictedWaitMinutes}
+              />
+            ) : (
+              <span className="text-slate-400">-</span>
+            )}
+          </p>
         </div>
       </div>
 
@@ -99,6 +166,7 @@ export default function StaffDashboard() {
     return today;
   });
   const [department, setDepartment] = useState("all");
+  const [staffRoleFilter, setStaffRoleFilter] = useState("all");
   const [availableStaff, setAvailableStaff] = useState([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -136,6 +204,12 @@ export default function StaffDashboard() {
   useEffect(() => {
     loadAvailableStaff();
   }, [department, queue, loadAvailableStaff]); // Reload when queue changes
+
+  // Filter available staff by role
+  const filteredAvailableStaff = useMemo(() => {
+    if (staffRoleFilter === "all") return availableStaff;
+    return availableStaff.filter((s) => s.role === staffRoleFilter);
+  }, [availableStaff, staffRoleFilter]);
 
   // Callback for when clock status changes
   const handleClockStatusChange = useCallback(() => {
@@ -276,6 +350,7 @@ export default function StaffDashboard() {
             name: displayName,
             dept: entry.department || data.department || department,
             eta: entry.predicted_wait_minutes != null ? `${entry.predicted_wait_minutes} minutes` : "-",
+            predictedWaitMinutes: entry.predicted_wait_minutes,
             visitId: entry.visit_id,
             anonToken: entry.anon_token,
             checkinTime: entry.checkin_time,
@@ -323,6 +398,7 @@ export default function StaffDashboard() {
               name: displayName,
               dept: entry.department || response.department || department,
               eta: entry.predicted_wait_minutes != null ? `${entry.predicted_wait_minutes} minutes` : "-",
+              predictedWaitMinutes: entry.predicted_wait_minutes,
               visitId: entry.visit_id,
               anonToken: entry.anon_token,
               checkinTime: entry.checkin_time,
@@ -363,10 +439,10 @@ export default function StaffDashboard() {
               </p>
               {/* Logged in user display */}
               {currentUser && (
-                <p className="text-sm text-slate-400 mt-2">
-                  Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                <p className="text-sm text-muted mt-2">
+                  Logged in as: <span className="font-semibold text-highlight">{currentUser.full_name}</span> ({currentUser.role})
                   {currentUser.department && (
-                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                    <span> • Department: <span className="font-semibold text-highlight">{currentUser.department}</span></span>
                   )}
                 </p>
               )}
@@ -378,10 +454,13 @@ export default function StaffDashboard() {
                 <ClockInOutButton onClockStatusChange={handleClockStatusChange} />
               )}
 
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
               {/* Logout Button */}
               <button
                 onClick={logout}
-                className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
+                className="px-4 py-2 btn-logout rounded-lg border transition-colors duration-200 text-sm font-medium"
               >
                 Logout
               </button>
@@ -420,7 +499,7 @@ export default function StaffDashboard() {
             <select
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
-              className="select-standard ml-auto"
+              className="select-standard"
             >
               {DEPARTMENTS.map((dept) => (
                 <option key={dept.value} value={dept.value}>
@@ -429,12 +508,25 @@ export default function StaffDashboard() {
               ))}
             </select>
 
+            {/* Staff Role Filter */}
+            <select
+              value={staffRoleFilter}
+              onChange={(e) => setStaffRoleFilter(e.target.value)}
+              className="select-standard"
+            >
+              {STAFF_ROLES.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
+                </option>
+              ))}
+            </select>
+
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="select-standard ml-auto"
+              className="select-standard"
             >
-              <option value="all">Status / Dept</option>
+              <option value="all">All Status</option>
               <option value="waiting">Waiting</option>
               <option value="in-progress">In Progress</option>
               <option value="completed">Completed</option>
@@ -532,7 +624,7 @@ export default function StaffDashboard() {
         isOpen={isAssignModalOpen}
         onClose={handleCloseModal}
         onAssign={handleAssignStaff}
-        availableStaff={availableStaff}
+        availableStaff={filteredAvailableStaff}
         patientName={selectedPatient?.name || ""}
         patientDepartment={selectedPatient?.dept || ""}
       />
