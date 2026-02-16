@@ -32,20 +32,20 @@ export default function AssignStaffModal({ isOpen, onClose, onAssign, availableS
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="card-modal w-full max-w-md">
-        <h2 className="heading-2 mb-4 text-white">Assign Staff Member</h2>
+        <h2 className="heading-2 mb-4">Assign Staff Member</h2>
         <p className="subtitle mb-6">
           Select a staff member to assign to <span className="font-semibold">{patientName}</span>
         </p>
 
         {departmentStaff.length === 0 ? (
           <div className="mb-6">
-            <p className="text-body text-red-300">
+            <p className="text-body text-red-500">
               No staff members from the {patientDepartment} department are currently clocked in.
             </p>
           </div>
         ) : (
           <div className="mb-6">
-            <label className="block text-body font-semibold text-white mb-2">
+            <label className="block text-body font-semibold mb-2">
               Staff Member ({patientDepartment})
             </label>
             <select
