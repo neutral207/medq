@@ -1,6 +1,16 @@
 import React from "react";
 import SummaryCard from "./SummaryCard";
 
+function formatWaitTime(minutes) {
+  const totalSeconds = Math.round((minutes || 0) * 60);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 function SummaryCardsRow({ metrics }) {
   return (
     <div style={{
@@ -26,8 +36,7 @@ function SummaryCardsRow({ metrics }) {
 
       <SummaryCard
         title="Average Wait Time"
-        value={metrics.averageWait}
-        suffix="min"
+        value={formatWaitTime(metrics.averageWait)}
         chartData={{
           labels: metrics.averageWaitHistory.map((_, i) => i),
           datasets: [

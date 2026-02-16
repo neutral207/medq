@@ -5,6 +5,7 @@ import { useWebSocket } from "../contexts/WebSocketContext";
 import TabSwitcher from "../components/TabSwitcher";
 import { hasPermission } from "../utils/permissions";
 import { getCurrentUser, logout } from "../utils/authApi";
+import ThemeToggle from "../components/ThemeToggle";
 
 const ROLE_COLORS = {
   nurse: "bg-blue-500",
@@ -153,22 +154,27 @@ export default function StaffManagement() {
               </p>
               {/* Logged in user display */}
               {currentUser && (
-                <p className="text-sm text-slate-400 mt-2">
-                  Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                <p className="text-sm text-muted mt-2">
+                  Logged in as: <span className="font-semibold text-highlight">{currentUser.full_name}</span> ({currentUser.role})
                   {currentUser.department && (
-                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                    <span> • Department: <span className="font-semibold text-highlight">{currentUser.department}</span></span>
                   )}
                 </p>
               )}
             </div>
 
-            {/* Logout Button */}
-            <button
-              onClick={logout}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
-            >
-              Logout
-            </button>
+            <div className="flex items-start gap-3">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
+              {/* Logout Button */}
+              <button
+                onClick={logout}
+                className="px-4 py-2 btn-logout rounded-lg border transition-colors duration-200 text-sm font-medium"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 

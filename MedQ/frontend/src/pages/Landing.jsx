@@ -1,11 +1,17 @@
 import { Link, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex flex-col">
+    <div className="page-gradient flex flex-col">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
       {/* content */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
         {/* Logo + Title */}
@@ -22,14 +28,14 @@ export default function Landing() {
 
         <button
           onClick={() => navigate("/patient-checkin")}
-          className="mt-6 rounded-full px-8 py-3 text-base sm:text-lg font-semibold
+          className="mt-6 rounded-full px-8 py-3 text-base sm:text-lg font-semibold text-white
                      bg-medqPink hover:bg-medqAltPink transition-colors focus:outline-none"
         >
           Patient Check-in
         </button>
       </div>
 
-      <footer className="px-6 py-4 text-center text-sm text-white/80">
+      <footer className="px-6 py-4 text-center text-sm subtitle">
         Admins and Staff may login{" "}
         <Link
           to="/staff-login"
