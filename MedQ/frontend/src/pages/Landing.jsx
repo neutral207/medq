@@ -23,7 +23,7 @@ export default function Landing() {
         <button
           onClick={() => navigate("/patient-checkin")}
           className="mt-6 rounded-full px-8 py-3 text-base sm:text-lg font-semibold
-                     bg-medqPink hover:bg-pink-400 transition-colors focus:outline-none"
+                     bg-medqPink hover:bg-medqAltPink transition-colors focus:outline-none"
         >
           Patient Check-in
         </button>

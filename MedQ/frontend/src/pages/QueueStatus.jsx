@@ -1,72 +1,237 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
+import { useWebSocket } from "../contexts/WebSocketContext";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
 
 export default function QueueStatus() {
-  // Temporary data
-  const department = "Urgent Care";
-  const urgency = "Moderate";
-  const position = "3";
-  const estWaitMinutes = 20;
-  const checkinTime = "12:00 PM";
-  const lastUpdated = "12:0 PM";
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { socket } = useWebSocket();
+
+  const { visitId, anonToken, department, initialWait, severity } = location.state || {};
+
+  const [queuePosition, setQueuePosition] = useState(null);
+  const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait);
+  const [checkinTime, setCheckinTime] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [statusError, setStatusError] = useState("");
+
+  const startingSeconds = useMemo(() => {
+    const mins = Number(estWaitMinutes);
+    if (!Number.isFinite(mins) || mins <= 0) return 0;
+
+    // If we have a checkin time, calculate elapsed time and subtract from predicted wait
+    if (checkinTime) {
+      const checkinDate = new Date(checkinTime);
+      const now = new Date();
+      const elapsedMinutes = (now - checkinDate) / 1000 / 60;
+      const remainingMinutes = Math.max(0, mins - elapsedMinutes);
+      return Math.round(remainingMinutes * 60);
+    }
+
+    return Math.round(mins * 60);
+  }, [estWaitMinutes, checkinTime]);
+
+  const [secondsLeft, setSecondsLeft] = useState(startingSeconds);
+
+  useEffect(() => {
+    setSecondsLeft(startingSeconds);
+  }, [startingSeconds]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+
+    const timer = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [secondsLeft]);
+
+  function formatTime(totalSeconds) {
+    const s = Math.max(0, Number(totalSeconds) || 0);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+  }
+
+  function severityLabel(s) {
+    const n = Number(s);
+    if (n >= 5) return "Critical";
+    if (n === 4) return "High";
+    if (n === 3) return "Moderate";
+    if (n === 2) return "Low";
+    if (n === 1) return "Very Low";
+    return "Unknown";
+  }
+
+  // Initial fetch of visit data using public endpoint
+  useEffect(() => {
+    if (!visitId || !anonToken) return;
+
+    const fetchVisit = async () => {
+      setStatusError("");
+
+      try {
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to fetch visit status");
+        }
+
+        const data = await response.json();
+        const visit = data?.visit;
+
+        if (!visit) {
+          setStatusError("Visit data not found in API response.");
+          return;
+        }
+
+        const qp = visit.queue_position ?? visit.queuePosition ?? null;
+        const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+        const ct = visit.checkin_time ?? visit.checkinTime ?? null;
+
+        if (qp != null) setQueuePosition(qp);
+        if (pw != null) setEstWaitMinutes(pw);
+        if (ct != null) setCheckinTime(ct);
+
+        setLastUpdated(new Date().toLocaleString());
+
+        if (qp == null) {
+          setStatusError("Visit loaded, but queue position is missing.");
+        }
+      } catch (err) {
+        console.error("Error fetching visit:", err);
+        setStatusError(String(err?.message || err));
+      }
+    };
+
+    fetchVisit();
+  }, [visitId, anonToken]);
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!socket || !visitId || !anonToken) return;
+
+    const handleQueueUpdate = async () => {
+      // Reload visit data when queue updates using public endpoint
+      try {
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const visit = data?.visit;
+
+        if (visit) {
+          const qp = visit.queue_position ?? visit.queuePosition ?? null;
+          const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+          const ct = visit.checkin_time ?? visit.checkinTime ?? null;
+
+          if (qp != null) setQueuePosition(qp);
+          if (pw != null) setEstWaitMinutes(pw);
+          if (ct != null) setCheckinTime(ct);
+
+          setLastUpdated(new Date().toLocaleString());
+        }
+      } catch (err) {
+        console.error("Error reloading visit after queue update:", err);
+      }
+    };
+
+    socket.on("queue_update", handleQueueUpdate);
+
+    return () => {
+      socket.off("queue_update", handleQueueUpdate);
+    };
+  }, [socket, visitId, anonToken]);
+
+  const handleBackToCheckIn = () => {
+  window.location.href = "http://localhost:3000/patient-checkin";
+  };
+
+  if (!visitId) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+        <main className="w-full max-w-3xl px-6 py-10">
+          <h1 className="text-3xl font-bold mb-2">Queue Status</h1>
+          <p className="text-slate-300">No visit information found. Please check in again.</p>
+
+          <button
+            onClick={handleBackToCheckIn}
+            className="mt-6 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
+          >
+            Back to Check In
+          </button>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
-      {/* Header */}
-      <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 md:mb-6">
-        <img
-          src={medqLogo}
-          alt="Med-Q logo"
-          className="block h-32 object-contain drop-shadow-lg"
-        />
-        <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">
-          Queue Status
-        </h1>
-      </header>
-
-      <main className="px-6 flex justify-center py-8 md:py-12">
-        <section className="w-[360px] text-center space-y-6 text-[15px] font-medium">
-          {/* Top Message */}
-          <div className="space-y-2">
-            <p className="leading-snug">
-              Thank you. Your department will be
-            </p>
-            <p className="text-lg font-semibold">{department}</p>
-            <p className="leading-snug">
-              and your urgency level is 
-            </p>
-            <p className="text-lg font-semibold">{urgency}</p>
+    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+      <main className="w-full max-w-3xl px-6 py-10">
+        <header className="mb-8 flex items-center gap-3">
+          <img src={medqLogo} alt="MedQ" className="h-10 w-10" />
+          <div>
+            <h1 className="text-4xl font-bold">Queue Status</h1>
+            <p className="text-slate-300 text-sm mt-1">Track your position and estimated wait time</p>
           </div>
+        </header>
 
-          {/* Queue Info */}
-          <div className="space-y-3">
-            <p className="text-lg font-semibold">Your place in queue:</p>
-            <p className="text-5xl font-bold tracking-tight">#{position}</p>
+        <div className="bg-white/10 border border-white/10 rounded-2xl p-6 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <div className="text-slate-300 text-xs">Department</div>
+              <div className="text-lg font-semibold mt-1">{department || "Unknown"}</div>
+            </div>
 
-            <div className="mt-2 space-y-1">
-              <p className="text-lg font-semibold">Estimated Wait Time:</p>
-              <p className="text-2xl font-semibold">
-                {estWaitMinutes} minutes
-              </p>
-              <p className="text-xs font-normal text-white/70">
-                (Dynamic timer will update automatically)
-              </p>
+            <div>
+              <div className="text-slate-300 text-xs">Urgency</div>
+              <div className="text-lg font-semibold mt-1">
+                {severityLabel(severity)}
+                {severity != null ? ` (Severity ${severity})` : ""}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-slate-300 text-xs">Your Queue Number</div>
+              <div className="text-3xl font-bold mt-1">
+                {queuePosition != null ? queuePosition : "Loading..."}
+              </div>
+              {statusError ? <div className="text-sm text-red-300 mt-2">{statusError}</div> : null}
+            </div>
+
+            <div>
+              <div className="text-slate-300 text-xs">Estimated Time Remaining</div>
+              <div className="text-3xl font-bold mt-1">
+                {estWaitMinutes != null ? formatTime(secondsLeft) : "Calculating..."}
+              </div>
+              <div className="text-slate-300 text-xs mt-2">
+                {lastUpdated ? `Last updated: ${lastUpdated}` : ""}
+              </div>
             </div>
           </div>
 
-          <div className="text-xs font-normal text-white/80 space-y-1 leading-relaxed">
-            <p>
-              You completed your check-in at:{" "}
-              <span className="font-semibold">{checkinTime}</span>
-            </p>
-            <p>
-              Last updated:{" "}
-              <span className="font-semibold">{lastUpdated}</span>
-            </p>
-            <p className="mt-2">
-              Please stay up to date with any announcements from the hospital about your care.
-            </p>
+          <div className="mt-6 pt-6 border-t border-white/10">
+            <div className="text-slate-300 text-xs">Tracking Token</div>
+            <div className="font-mono text-sm mt-1 break-all">{anonToken || "N/A"}</div>
           </div>
-        </section>
+        </div>
+
+        <button
+          onClick={handleBackToCheckIn}
+          className="mt-8 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-sm"
+        >
+          Back to Check In
+        </button>
       </main>
     </div>
   );

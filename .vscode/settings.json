@@ -20,5 +20,8 @@
         "test*.py"
     ],
     "python2.testing.pytestEnabled": false,
-    "python2.testing.unittestEnabled": true
+    "python2.testing.unittestEnabled": true,
+    "python.analysis.extraPaths": [
+        "./MedQ/backend/src"
+    ]
 }

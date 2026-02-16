@@ -1,6 +1,7 @@
 from alembic import op
 from pathlib import Path
 
+<<<<<<< Updated upstream
 # revision identifiers
 revision = "0001_baseline"
 down_revision = None
@@ -27,4 +28,27 @@ def downgrade():
       DROP TABLE IF EXISTS staff;
       DROP TABLE IF EXISTS events_log;
       DROP TABLE IF EXISTS departments;
+=======
+revision = "0001_baseline"
+down_revision = None
+
+def upgrade():
+    base = Path(__file__).resolve().parents[2]  # backend/src/database
+    schema_path = base / "schema.sql"
+    sql = schema_path.read_text()
+    op.execute(sql)
+
+def downgrade():
+    op.execute("""
+    DROP TABLE IF EXISTS user_roles;
+    DROP TABLE IF EXISTS roles;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS visit_events;
+    DROP TABLE IF EXISTS wait_time_agg_hourly;
+    DROP TABLE IF EXISTS visits;
+    DROP TABLE IF EXISTS patients;
+    DROP TABLE IF EXISTS staff;
+    DROP TABLE IF EXISTS events_log;
+    DROP TABLE IF EXISTS departments;
+>>>>>>> Stashed changes
     """)

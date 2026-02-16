@@ -1,10 +1,143 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+@config "../../../tailwind.config.js";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  font-family: 'Ubuntu', sans-serif;
 }
 
+/* Custom date picker icon color */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(55%) sepia(75%) saturate(452%) hue-rotate(290deg) brightness(99%) contrast(93%);
+  cursor: pointer;
+}
+
+/* MedQ Pink focus states for all form inputs */
+input:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
+
+select:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
+
+button:focus {
+  outline: none;
+  box-shadow: 0 0 6px #FF8CC6;
+  border-color: #FF8CC6;
+}
+
+/* Standardized Component Classes */
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply rounded-xl px-6 py-2 bg-medqPink hover:bg-medqPink/90 text-sm font-semibold shadow-md transition-colors;
+  }
+
+  .btn-secondary {
+    @apply rounded-xl px-6 py-2 bg-slate-600 hover:bg-slate-500 text-sm font-semibold shadow-md transition-colors;
+  }
+
+  .btn-danger {
+    @apply rounded-xl px-4 py-2 bg-red-500/80 hover:bg-red-500 text-sm font-semibold shadow transition-colors;
+  }
+
+  .btn-success {
+    @apply rounded-xl px-4 py-2 bg-green-500/80 hover:bg-green-500 text-sm font-semibold shadow transition-colors;
+  }
+
+  .btn-small {
+    @apply rounded-full px-4 py-1 border border-slate-400/70 hover:bg-slate-600/80 text-xs transition-colors;
+  }
+
+  /* Form Inputs */
+  .input-standard {
+    @apply rounded-xl bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50;
+  }
+
+  .select-standard {
+    @apply rounded-xl bg-[#2D3047] border border-slate-600/70 px-4 py-2 text-sm;
+  }
+
+  .input-date {
+    @apply rounded-xl bg-[#2D3047] border border-slate-600/70 px-3 py-2 text-sm text-white;
+  }
+
+  /* Cards */
+  .card-standard {
+    @apply bg-[#2D3047] rounded-2xl px-4 py-4 shadow-md;
+  }
+
+  .card-modal {
+    @apply bg-[#2D3047] rounded-2xl p-6 shadow-2xl;
+  }
+
+  .card-info {
+    @apply bg-white/10 border border-white/10 rounded-2xl p-6 shadow-sm;
+  }
+
+  /* Containers */
+  .container-staff {
+    @apply max-w-5xl px-6 py-10;
+  }
+
+  .container-patient {
+    @apply max-w-3xl px-6 py-10;
+  }
+
+  .container-form {
+    @apply max-w-md px-6 py-10;
+  }
+
+  /* Typography */
+  .heading-1 {
+    @apply text-4xl font-bold;
+  }
+
+  .heading-2 {
+    @apply text-2xl font-semibold;
+  }
+
+  .heading-3 {
+    @apply text-lg font-semibold;
+  }
+
+  .subtitle {
+    @apply text-slate-300 text-sm mt-1;
+  }
+
+  .text-body {
+    @apply text-sm;
+  }
+
+  .text-small {
+    @apply text-xs;
+  }
+
+  .text-empty {
+    @apply text-slate-400 text-sm italic;
+  }
+
+  /* Layout */
+  .page-gradient {
+    @apply min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white;
+  }
+
+  .header-section {
+    @apply mb-8;
+  }
+
+  .section-margin {
+    @apply mb-6;
+  }
+}
 .logo {
   height: 6em;
   padding: 1.5em;

@@ -5,21 +5,43 @@ INSERT INTO departments (name, triage_rules) VALUES
   ('Emergency', '{}'::jsonb),
   ('Radiology', '{}'::jsonb),
   ('Pediatrics', '{}'::jsonb),
-  ('Cardiology', '{}'::jsonb)
+  ('Cardiology', '{}'::jsonb),
+  ('Urgent Care', '{}'::jsonb),
+  ('General Medicine', '{}'::jsonb),
+  ('Orthopedics', '{}'::jsonb),
+  ('Neurology', '{}'::jsonb),
+  ('Oncology', '{}'::jsonb),
+  ('OBGYN', '{}'::jsonb),
+  ('Surgery', '{}'::jsonb),
+  ('ICU', '{}'::jsonb),
+  ('Laboratory', '{}'::jsonb),
+  ('Pharmacy', '{}'::jsonb),
+  ('Behavioral Health', '{}'::jsonb),
+  ('Dermatology', '{}'::jsonb),
+  ('ENT', '{}'::jsonb),
+  ('Ophthalmology', '{}'::jsonb),
+  ('Gastroenterology', '{}'::jsonb),
+  ('Pulmonology', '{}'::jsonb),
+  ('Nephrology', '{}'::jsonb),
+  ('Urology', '{}'::jsonb),
+  ('Endocrinology', '{}'::jsonb),
+  ('Infectious Disease', '{}'::jsonb),
+  ('Rehabilitation', '{}'::jsonb)
 ON CONFLICT (name) DO NOTHING;
 
 -- Staff (look up dept ids by name)
 INSERT INTO staff (name, role, dept_id, active)
 SELECT v.name, v.role, d.dept_id, true
 FROM (VALUES
+  ('Admin User','admin', NULL),               
   ('Avery Chen','nurse','Emergency'),
-  ('Jordan Lee','physician','Emergency'),
-  ('Sam Patel','tech','Radiology'),
+  ('Jordan Lee','doctor','Emergency'),
+  ('Sam Patel','physician','Pediatrics'),
   ('Priya Desai','nurse','Pediatrics'),
-  ('Miguel Santos','physician','Cardiology'),
-  ('Taylor Brooks','admin','Emergency')
+  ('Miguel Santos','doctor','Cardiology'),
+  ('Taylor Brooks','doctor','Radiology')
 ) AS v(name, role, dept_name)
-JOIN departments d ON d.name = v.dept_name
+LEFT JOIN departments d ON d.name = v.dept_name
 ON CONFLICT DO NOTHING;
 
 -- Helper: generate short anon tokens
@@ -69,7 +91,7 @@ SELECT
   p2.patient_id,
   (SELECT dept_id FROM depts WHERE name='Radiology'),
   NULL,
-  'in_service',
+  'in-progress',
   now() - interval '50 minutes',
   now() - interval '10 minutes',
   NULL,
@@ -81,7 +103,7 @@ SELECT
   p3.patient_id,
   (SELECT dept_id FROM depts WHERE name='Emergency'),
   (SELECT staff_id FROM st WHERE dept_name='Emergency' AND staff_id = (SELECT MAX(staff_id) FROM st WHERE dept_name='Emergency')),
-  'queued',
+  'waiting',
   now() - interval '20 minutes',
   NULL,
   NULL,
@@ -93,7 +115,7 @@ SELECT
   p4.patient_id,
   (SELECT dept_id FROM depts WHERE name='Pediatrics'),
   NULL,
-  'queued',
+  'waiting',
   now() - interval '10 minutes',
   NULL,
   NULL,
@@ -105,7 +127,7 @@ SELECT
   p5.patient_id,
   (SELECT dept_id FROM depts WHERE name='Cardiology'),
   NULL,
-  'queued',
+  'waiting',
   now() - interval '5 minutes',
   NULL,
   NULL,
@@ -162,3 +184,66 @@ r AS (
 INSERT INTO user_roles (user_id, role_id)
 SELECT u.user_id, r.role_id FROM u CROSS JOIN r
 ON CONFLICT DO NOTHING;
+
+-- ============================================================================
+-- STAFF AUTH ACCOUNTS (Login credentials for staff members)
+-- ============================================================================
+-- Password for ALL test users: "password123"
+-- Bcrypt hash: $2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO
+--
+-- Username pattern: firstname (lowercase) OR role-based
+-- Role mapping from staff table -> staff_auth table:
+--   staff.role='admin' -> staff_auth.role='admin'
+--   staff.role='doctor' -> staff_auth.role='doctor'
+--   staff.role='physician' -> staff_auth.role='physician'
+--   staff.role='nurse' -> staff_auth.role='nurse'
+-- ============================================================================
+
+-- 1. Admin User (System Administrator)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'admin', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'admin', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Admin User'
+ON CONFLICT (username) DO NOTHING;
+
+-- 2. Avery Chen (Nurse - Emergency)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'avery', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'nurse', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Avery Chen'
+ON CONFLICT (username) DO NOTHING;
+
+-- 3. Jordan Lee (Doctor - Emergency)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'jordan', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'doctor', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Jordan Lee'
+ON CONFLICT (username) DO NOTHING;
+
+-- 4. Sam Patel (Physician - Pediatrics)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'sam', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'physician', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Sam Patel'
+ON CONFLICT (username) DO NOTHING;
+
+-- 5. Priya Desai (Nurse - Pediatrics)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'priya', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'nurse', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Priya Desai'
+ON CONFLICT (username) DO NOTHING;
+
+-- 6. Miguel Santos (Doctor - Cardiology)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'miguel', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'doctor', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Miguel Santos'
+ON CONFLICT (username) DO NOTHING;
+
+-- 7. Taylor Brooks (Doctor - Radiology)
+INSERT INTO staff_auth (username, password_hash, full_name, role, dept_id, is_active)
+SELECT 'taylor', '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+       s.name, 'doctor', s.dept_id, s.active
+FROM staff s WHERE s.name = 'Taylor Brooks'
+ON CONFLICT (username) DO NOTHING;

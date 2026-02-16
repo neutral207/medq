@@ -8,3 +8,10 @@ pytest>=8.0.0
 
 alembic>=1.13.2
 SQLAlchemy>=2.0.0
+flask-jwt-extended>=4.6.0
+pyjwt==2.8.0
+bcrypt==5.0.0
+joblib
+pandas
+scikit-learn==1.7.1
+python-dotenv==1.0.0

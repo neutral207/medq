@@ -13,26 +13,22 @@ is a real-time patient flow and queue management system designed to reduce medic
 - **Queue Visualization Panel** – Real-time view of all patients in queue.  
 - **Average Wait Time Display** – Displays estimated waiting time for each patient.  
 - **Predictive Wait Time Engine** – Uses machine learning to forecast future wait times.  
-- **Staff Load Monitor** – Tracks and visualizes current staff workload.  
-- **Overload Alerts** – Notifies administrators when queues exceed thresholds.  
-- **Basic Analytics Charts** – Visual dashboards showing key metrics.  
-- **Role-Based Login** – Secure access for admins, staff, and patients.  
 - **Database Logging & REST API** – All data interactions are logged with accessible endpoints.
 
 ### Growth Features 
-- Historical Data Trends
-- Staff Utilization Dashboard
-- Configurable Simulation Settings
+- Overload Alerts
+- Historical Data 
+- Role-Based Login
+- Heatmap of Wait Times by Hour/Day  
 - Custom Data Export (CSV)
 - Public Patient ETA Display
 
 ### Enhancement Features 
 - Predictive Staffing Recommendations  
 - Integration API for hospital systems  
-- Heatmap of Wait Times by Hour/Day  
 - AI-Powered Severity Classification  
 - IoT Integration for Check-In Kiosks 
-
+- Staff Utilization Dashboard
 ---
 
 ## Techonlogies
@@ -86,16 +82,17 @@ is a real-time patient flow and queue management system designed to reduce medic
 This project is licensed under the **MIT License** – free for modification and distribution with attribution.
 
 ## Contributors
-- ** Chad Gibson** - Mentor/instructor
+- **Chad Gibson** - Mentor/instructor
 - **Joel Simpson** – Project Lead, Backend Developer  
 - **Amy Darr** -  UI and dashboard design  
 - **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
 deployment 
-- **Cheyenne McManhan** - - Machine Learning Engineer – Prediction model creation and maintenance  
+- **Cheyenne McMahan** - - Machine Learning Engineer – Prediction model creation and maintenance  
 
  - QA Engineer – API and UI testing
 
   ** Project Status 
   **Status:** Pre-Alpha
-  The sataus of the project is settting everything up. 
+  The project's initial phase is almost complete, with initial testing beginning soon.
+
   

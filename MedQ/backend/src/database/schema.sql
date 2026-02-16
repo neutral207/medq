@@ -12,9 +12,19 @@ CREATE TABLE IF NOT EXISTS departments (
 CREATE TABLE IF NOT EXISTS staff (
   staff_id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('nurse','physician','admin','tech')),
+  role TEXT NOT NULL CHECK (role IN ('nurse','physician','doctor','admin')),
   dept_id INT REFERENCES departments(dept_id) ON UPDATE CASCADE,
   active BOOLEAN DEFAULT TRUE
+);
+
+-- Staff shifts table to track when staff clock in/out
+CREATE TABLE IF NOT EXISTS staff_shifts (
+  shift_id SERIAL PRIMARY KEY,
+  staff_id INT NOT NULL REFERENCES staff(staff_id) ON DELETE CASCADE,
+  dept_id INT NOT NULL REFERENCES departments(dept_id) ON UPDATE CASCADE,
+  clock_in TIMESTAMPTZ NOT NULL DEFAULT now(),
+  clock_out TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Patients
@@ -24,7 +34,10 @@ CREATE TABLE IF NOT EXISTS patients (
   anon_token TEXT NOT NULL UNIQUE,          -- used for public ETA view
   severity INT CHECK (severity BETWEEN 1 AND 5),
   symptoms TEXT,
-  source TEXT NOT NULL CHECK (source IN ('kiosk','mobile','desk')) DEFAULT 'kiosk'
+  source TEXT NOT NULL CHECK (source IN ('kiosk','mobile','desk')) DEFAULT 'kiosk',
+  full_name TEXT,
+  dob DATE, 
+  phone TEXT
 );
 
 -- Visits (one per check-in)
@@ -33,7 +46,7 @@ CREATE TABLE IF NOT EXISTS visits (
   patient_id UUID REFERENCES patients(patient_id) ON DELETE SET NULL,
   dept_id INT NOT NULL REFERENCES departments(dept_id) ON UPDATE CASCADE,
   assigned_staff INT REFERENCES staff(staff_id) ON DELETE SET NULL,
-  status TEXT NOT NULL CHECK (status IN ('queued','in_service','completed','left')) DEFAULT 'queued',
+  status TEXT NOT NULL CHECK (status IN ('waiting','in-progress','completed','left')) DEFAULT 'waiting',
   checkin_time TIMESTAMPTZ NOT NULL DEFAULT now(),
   service_start TIMESTAMPTZ,
   service_end TIMESTAMPTZ,
@@ -81,6 +94,29 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS staff_auth (
+  staff_id SERIAL PRIMARY KEY,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  full_name VARCHAR(100) NOT NULL,
+  role VARCHAR(20) NOT NULL DEFAULT 'staff',
+  dept_id INT REFERENCES departments(dept_id),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT now()
+);
+
+-- Default admin user (password: "password123")
+-- Note: This is typically overwritten by seed.sql which creates all test users
+INSERT INTO staff_auth (username, password_hash, full_name, role, is_active)
+VALUES(
+    'admin',
+    '$2b$12$URwNoUyUIZigkv/VkJXflOJAPXWV/KcEb5CBHRsoZOJvxPW.e1BoO',
+    'System Admin',
+    'admin',
+    true
+)
+ON CONFLICT (username) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS roles (
   role_id SERIAL PRIMARY KEY,
   name TEXT UNIQUE NOT NULL CHECK (name IN ('admin','staff','patient','it'))
@@ -91,3 +127,51 @@ CREATE TABLE IF NOT EXISTS user_roles (
   role_id INT REFERENCES roles(role_id) ON DELETE CASCADE,
   PRIMARY KEY (user_id, role_id)
 );
+
+-- Indexes for performance optimization
+
+-- Fast lookups of queued visits by department and time
+CREATE INDEX IF NOT EXISTS idx_visits_dept_status_time
+  ON visits (dept_id, status, checkin_time);
+
+-- Common filters on status alone
+CREATE INDEX IF NOT EXISTS idx_visits_status
+  ON visits (status);
+
+-- Sort and filter by checkin time
+CREATE INDEX IF NOT EXISTS idx_visits_checkin_time
+  ON visits (checkin_time);
+
+-- Staff load: who is in_service and how many per staff
+CREATE INDEX IF NOT EXISTS idx_visits_assigned_staff_status
+  ON visits (assigned_staff, status);
+
+-- Quick lookup of visits by patient
+CREATE INDEX IF NOT EXISTS idx_visits_patient
+  ON visits (patient_id);
+
+-- Public ETA lookup by anon token
+CREATE INDEX IF NOT EXISTS idx_patients_anon_token
+  ON patients (anon_token);
+
+-- Sometimes you might group or filter by severity
+CREATE INDEX IF NOT EXISTS idx_patients_severity
+  ON patients (severity);
+
+-- Staff by department and active flag
+CREATE INDEX IF NOT EXISTS idx_staff_dept_active
+  ON staff (dept_id, active);
+
+-- Index for finding active shifts (no clock_out)
+CREATE INDEX IF NOT EXISTS idx_staff_shifts_active
+  ON staff_shifts (staff_id, dept_id)
+  WHERE clock_out IS NULL;
+
+-- Index for querying by department and time
+CREATE INDEX IF NOT EXISTS idx_staff_shifts_dept_time
+  ON staff_shifts (dept_id, clock_in, clock_out);
+
+-- Hourly aggregates are already primary keyed by (bucket_start, dept_id)
+-- but this helps when you filter by department first
+CREATE INDEX IF NOT EXISTS idx_wait_agg_dept_bucket
+  ON wait_time_agg_hourly (dept_id, bucket_start);

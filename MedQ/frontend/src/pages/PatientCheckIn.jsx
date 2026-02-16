@@ -1,15 +1,49 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
+import { apiRequest } from "../apiClient";
 
 const REASONS = [
   "Fever", "Cough", "Headache", "Chest pain", "Shortness of breath",
   "Abdominal pain", "Nausea/Vomiting", "Diarrhea", "Allergic reaction",
-  "Injury/Trauma", "Medication refill", "Follow-up appointment", 
+  "Injury/Trauma", "Medication refill", "Follow-up appointment",
   "Lab work", "Immunization shot", "Physical Exam", "COVID-19 symptoms",
   "Flu symptoms", "Skin issue", "Ear pain", "Sore throat", "Back pain",
   "Pregnancy", "Mental health", "Other"
 ];
+
+function assignDeptAndSeverity(reason) {
+  const r = (reason || "").toLowerCase();
+
+  // default
+  let department = "Emergency";
+  let severity = 3;
+
+  if (r.includes("chest") || r.includes("shortness") || r.includes("allergic")) {
+    department = "Emergency";
+    severity = 4;
+  } else if (r.includes("injury") || r.includes("trauma")) {
+    department = "Emergency";
+    severity = 4;
+  } else if (r.includes("pregnancy")) {
+    department = "Pediatrics";
+    severity = 3;
+  } else if (r.includes("mental")) {
+    department = "Emergency";
+    severity = 3;
+  } else if (r.includes("lab work") || r.includes("immunization") || r.includes("physical")) {
+    department = "Radiology";
+    severity = 2;
+  } else if (r.includes("follow-up") || r.includes("medication refill")) {
+    department = "Radiology";
+    severity = 1;
+  } else if (r.includes("fever") || r.includes("cough") || r.includes("flu") || r.includes("covid") || r.includes("sore throat")) {
+    department = "Pediatrics";
+    severity = 2;
+  }
+
+  return { department, severity };
+}
 
 export default function PatientCheckIn() {
   const navigate = useNavigate();
@@ -21,6 +55,9 @@ export default function PatientCheckIn() {
     customReason: "",
     phone: "",
   });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const reasonListRef = useRef(null);
@@ -39,93 +76,126 @@ export default function PatientCheckIn() {
     setTimeout(() => setIsReasonOpen(false), 100);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    if (!formData.reason) {
-      alert("Please select a reason for your visit.");
-      openReasonList();
-      return;
+    try {
+      const chosenReason =
+        formData.reason === "Other"
+          ? formData.customReason
+          : formData.reason;
+
+      const { department, severity } = assignDeptAndSeverity(chosenReason);
+
+      const payload = {
+        name: formData.name,
+        dob: formData.dob,
+        symptoms: chosenReason,
+        phone: formData.phone,
+        department,
+        severity,
+      };
+
+      // Use direct fetch to avoid auth redirect for public endpoint
+      const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
+      const response = await fetch(`${API_BASE}/checkin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to check in");
+      }
+
+      const data = await response.json();
+      const { visit } = data;
+
+      if (!visit) {
+        throw new Error("Missing 'visit' field.");
+      }
+
+      navigate("/queue-status", {
+        state: {
+          visitId: visit.visit_id,
+          anonToken: visit.anon_token,
+          department: visit.department,
+          initialWait: visit.predicted_wait_minutes,
+          severity: visit.severity,
+          queuePosition: visit.queue_position,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error submitting check-in.");
+    } finally {
+      setLoading(false);
     }
-
-    if (formData.reason === "Other" && !formData.customReason.trim()) {
-      alert("Please describe your reason under 'Other'.");
-      return;
-    }
-
-    // TODO: Implement into database
-    console.log("Submitted:", formData);
-    alert("Check-in data submitted");
-
-    navigate("/queue-status");
   };
 
   return (
-    <div className='min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto'>
+    <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
       {/* Header */}
-      <header className='pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 sm:mb-6'>
-          <img
-            src={medqLogo}
-            alt="Med-Q Logo"
-            className='block h-32 object-contain drop-shadow-lg'
-          />
-          <h1 className='text-2xl md:text-[42px] tracking-wide text-white leading-tight'>
-            Med-Q
-          </h1>
+      <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 sm:mb-6">
+        <img src={medqLogo} alt="Med-Q Logo" className="block h-32 object-contain drop-shadow-lg" />
+        <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">Med-Q</h1>
       </header>
 
       {/* Form */}
-      <main className='px-6 flex justify-center py-8 md:py-12'>
-        <form 
-          onSubmit={handleSubmit} 
-          className='w-[360px] space-y-4 text-[15px] font-medium'
+      <main className="px-6 flex justify-center py-8 md:py-12">
+        <form
+          onSubmit={handleSubmit}
+          className="w-[360px] space-y-4 text-[15px] font-medium"
         >
-          <h2 className='text-lg font-semibold leading-snug mb-4 '>
+          <h2 className="text-lg font-semibold leading-snug mb-4">
             Welcome. Please fill out the following so we can better give the care you need.
           </h2>
 
           {/* Name */}
-          <div className='space-y-1'>
-            <label className='text-sm block mb-1'>
-              Name:
+          <div className="space-y-1">
+            <label className="text-sm block mb-1">
+              Name
               <input
-                type='text'
-                name='name'
-                placeholder='Last M First'
+                type="text"
+                name="name"
+                placeholder="Last M First"
                 value={formData.name}
                 onChange={handleChange}
-                className='w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none'
+                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 placeholder-white/50 focus:border-medqPink outline-none"
                 required
               />
             </label>
           </div>
 
           {/* Date of Birth */}
-          <div className='space-y-1'>
-            <label className='text-sm block mb-1'>
-              Date of Birth:
+          <div className="space-y-1">
+            <label htmlFor="dob" className="text-sm block mb-1">
+              Date of Birth
               <input
-                type='date'
-                name='dob'
+                type="date"
+                name="dob"
                 value={formData.dob}
                 onChange={handleChange}
-                className='w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 focus:border-medqPink outline-none uppercase'
+                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 focus:border-medqPink outline-none uppercase"
                 required
               />
             </label>
           </div>
-          
+
           {/* Reason */}
-          <div className='space-y-1'>
-            <label className='text-sm block'>Reason for Visit:</label>
+          <div className="space-y-1">
+            <label className="text-sm block mb-1">Reason for Visit</label>
             {!isReasonOpen && (
               <button
-                type='button'
+                type="button"
                 onClick={openReasonList}
-                className='w-full text-left rounded-md bg-transparent border border-white/30 px-3 py-2
-                           text-white/50 hover:text-white focus:border-medqPink outline-none'
+                className="w-full text-left rounded-md bg-transparent border border-white/30 px-3 py-2
+                           text-white/50 hover:text-white focus:border-medqPink outline-none"
                 aria-haspopup="listbox"
-                aria-expanded={isReasonOpen}  
+                aria-expanded={isReasonOpen}
               >
                 {formData.reason ? formData.reason : "Select a reason..."}
               </button>
@@ -134,7 +204,7 @@ export default function PatientCheckIn() {
             {isReasonOpen && (
               <select
                 ref={reasonListRef}
-                name='reason'
+                name="reason"
                 value={formData.reason || ""}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -145,7 +215,7 @@ export default function PatientCheckIn() {
                 onBlur={closeReasonList}
                 onKeyDown={(e) => e.key === "Escape" && closeReasonList()}
                 size={8}
-                className='w-full rounded-md bg-transparent text-white border border-white/30 py-2 pl-3'
+                className="w-full rounded-md bg-transparent text-white border border-white/30 py-2 pl-3"
                 required
               >
                 <option value="" disabled>Select a reason...</option>
@@ -157,12 +227,12 @@ export default function PatientCheckIn() {
 
             {formData.reason == "Other" && (
               <input
-                type='text'
-                name='customReason'
+                type="text"
+                name="customReason"
                 value={formData.customReason || ""}
                 onChange={handleChange}
-                placeholder='Briefly describe your reason'
-                className="mt-2 w-full rounded-md bg-transparent border border-white/30 text-white
+                placeholder="Briefly describe your reason"
+                className="mt-2 w-full rounded-md bg-transparent border border-white/30 text-white/50
                 placeholder-white/50 focus:outline-none focus:border-medqPink px-3 py-2"
                 required
               />
@@ -170,27 +240,34 @@ export default function PatientCheckIn() {
           </div>
 
           {/* Phone */}
-          <div className='space-y-1'>
-            <label className='text-sm block mb-1'>
-              Phone Number:
+          <div className="space-y-1">
+            <label className="text-sm block mb-1">
+              Phone Number
               <input
-                type='tel'
-                name='phone'
-                placeholder='(123) 456-7890'
+                type="tel"
+                name="phone"
+                placeholder="(123) 456-7890"
                 value={formData.phone}
                 onChange={handleChange}
-                className='w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none'
+                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
                 required
               />
             </label>
           </div>
 
+          {error && (
+            <p className="text-sm text-red-300 bg-red-900/40 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+
           {/* Button */}
-          <button 
-            type='submit' 
-            className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors"
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-4 bg-medqPink hover:bg-pink-400 py-2 rounded-md font-semibold transition-colors disabled:opacity-60"
           >
-            Continue
+            {loading ? "Submitting..." : "Continue"}
           </button>
         </form>
       </main>
