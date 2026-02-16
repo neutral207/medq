@@ -908,6 +908,112 @@ def login():
     return jsonify(message="login successful", token=token), 200
 
 
+# -------------------------
+# Heatmap: avg wait by day-of-week + hour
+# -------------------------
+@api_bp.get("/wait_heatmap")
+def wait_heatmap():
+    start = _parse_date(request.args.get("start"))
+    end = _parse_date(request.args.get("end"))
+
+    if not end:
+        end = date.today()
+    if not start:
+        start = end - timedelta(days=13)
+
+    where_sql, params = _date_range_clause("v.checkin_time::date", start, end)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT
+                  EXTRACT(DOW FROM v.checkin_time)::int AS dow,
+                  EXTRACT(HOUR FROM v.checkin_time)::int AS hour,
+                  COALESCE(ROUND(AVG(COALESCE(v.actual_wait_minutes, v.predicted_wait_minutes))::numeric, 2), 0) AS avg_wait,
+                  COUNT(*)::int AS count
+                FROM visits v
+                WHERE 1=1
+                {where_sql}
+                GROUP BY 1,2
+                ORDER BY 1,2;
+                """,
+                params,
+            )
+            cells = cur.fetchall()
+
+    return jsonify(
+        {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "cells": cells,
+        }
+    )
+
+
+# -------------------------
+# Staff utilization by department
+# -------------------------
+@api_bp.get("/staff_utilization")
+def staff_utilization():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # detect column options for on-duty / in-service
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='staff' AND column_name IN
+                  ('is_active','active','on_duty','is_on_duty','in_service','is_in_service');
+                """
+            )
+            cols = {r["column_name"] for r in cur.fetchall()}
+
+            active_expr = None
+            if "is_active" in cols:
+                active_expr = "s.is_active"
+            elif "active" in cols:
+                active_expr = "s.active"
+            elif "on_duty" in cols:
+                active_expr = "s.on_duty"
+            elif "is_on_duty" in cols:
+                active_expr = "s.is_on_duty"
+            else:
+                active_expr = "TRUE"
+
+            in_service_expr = None
+            if "in_service" in cols:
+                in_service_expr = "s.in_service"
+            elif "is_in_service" in cols:
+                in_service_expr = "s.is_in_service"
+            else:
+                in_service_expr = "FALSE"
+
+            cur.execute(
+                f"""
+                SELECT
+                  d.name AS department,
+                  COUNT(*)::int AS staff_total,
+                  SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::int AS active_staff,
+                  SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::int AS in_service_now,
+                  CASE
+                    WHEN SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END) = 0 THEN 0
+                    ELSE ROUND(
+                      (SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::numeric /
+                       SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::numeric) * 100, 2
+                    )
+                  END AS utilization_pct
+                FROM staff s
+                JOIN departments d ON d.dept_id = s.dept_id
+                GROUP BY d.name
+                ORDER BY d.name;
+                """
+            )
+            rows = cur.fetchall()
+
+    return jsonify({"departments": rows})
+
+
 # Protected example endpoint
 @api_bp.get("/protected")
 @jwt_required()
