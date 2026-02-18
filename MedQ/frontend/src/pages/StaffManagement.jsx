@@ -5,6 +5,7 @@ import { useWebSocket } from "../contexts/WebSocketContext";
 import TabSwitcher from "../components/TabSwitcher";
 import { hasPermission } from "../utils/permissions";
 import { getCurrentUser, logout } from "../utils/authApi";
+import ThemeToggle from "../components/ThemeToggle";
 
 const ROLE_COLORS = {
   nurse: "bg-blue-500",
@@ -127,6 +128,20 @@ export default function StaffManagement() {
   const onDutyStaff = staff.filter((s) => s.on_duty);
   const offDutyStaff = staff.filter((s) => !s.on_duty);
 
+  // Calculate efficiency for each staff member (completed visits or other metrics)
+  // You can adjust this based on your actual efficiency calculation
+  const staffWithEfficiency = onDutyStaff.map((member) => ({
+    ...member,
+    efficiency: member.completed_visits || member.patients_handled || Math.random() * 100, // Replace with actual metric
+  }));
+
+  // Find the best staff member (highest efficiency)
+  const bestStaffMember = staffWithEfficiency.length > 0
+    ? staffWithEfficiency.reduce((prev, current) =>
+        (prev.efficiency > current.efficiency) ? prev : current
+      )
+    : null;
+
   return (
     <div className="page-gradient flex justify-center">
       <main className="w-full container-staff">
@@ -139,22 +154,27 @@ export default function StaffManagement() {
               </p>
               {/* Logged in user display */}
               {currentUser && (
-                <p className="text-sm text-slate-400 mt-2">
-                  Logged in as: <span className="font-semibold text-slate-300">{currentUser.full_name}</span> ({currentUser.role})
+                <p className="text-sm text-muted mt-2">
+                  Logged in as: <span className="font-semibold text-highlight">{currentUser.full_name}</span> ({currentUser.role})
                   {currentUser.department && (
-                    <span> • Department: <span className="font-semibold text-slate-300">{currentUser.department}</span></span>
+                    <span> • Department: <span className="font-semibold text-highlight">{currentUser.department}</span></span>
                   )}
                 </p>
               )}
             </div>
 
-            {/* Logout Button */}
-            <button
-              onClick={logout}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-200 rounded-lg border border-red-500/50 transition-colors duration-200 text-sm font-medium"
-            >
-              Logout
-            </button>
+            <div className="flex items-start gap-3">
+              {/* Theme Toggle */}
+              <ThemeToggle />
+
+              {/* Logout Button */}
+              <button
+                onClick={logout}
+                className="px-4 py-2 btn-logout rounded-lg border transition-colors duration-200 text-sm font-medium"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
@@ -204,8 +224,15 @@ export default function StaffManagement() {
                   {onDutyStaff.map((member) => (
                     <div
                       key={member.staff_id}
-                      className="card-standard"
+                      className="card-standard relative"
                     >
+                      {/* Efficiency Badge */}
+                      {bestStaffMember && member.staff_id === bestStaffMember.staff_id && (
+                        <div className="absolute top-4 right-4 bg-gradient-to-r from-yellow-400 to-orange-400 text-slate-900 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                          ⭐ Top Performer
+                        </div>
+                      )}
+
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">

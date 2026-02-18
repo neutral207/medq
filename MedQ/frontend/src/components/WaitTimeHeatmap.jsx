@@ -1,13 +1,19 @@
 import React, { useEffect, useRef } from "react";
 import * as d3 from "d3";
+import { useTheme } from "../contexts/ThemeContext";
 
 const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function WaitTimeHeatmap({ data }) {
   const svgRef = useRef(null);
+  const { isDark } = useTheme();
 
   useEffect(() => {
     if (!data || data.length === 0) return;
+
+    // Theme-aware colors
+    const textColor = isDark ? "#cbd5e1" : "#374151";
+    const titleColor = isDark ? "#e2e8f0" : "#1f2937";
 
     const margin = { top: 30, right: 20, bottom: 40, left: 50 };
     const width = 700;
@@ -53,12 +59,12 @@ function WaitTimeHeatmap({ data }) {
       .append("div")
       .style("position", "absolute")
       .style("pointer-events", "none")
-      .style("background", "white")
-      .style("border", "1px solid #ccc")
+      .style("background", isDark ? "#374151" : "white")
+      .style("border", isDark ? "1px solid #4b5563" : "1px solid #ccc")
       .style("border-radius", "4px")
       .style("padding", "4px 8px")
       .style("font-size", "12px")
-      .style("color", "#333")
+      .style("color", isDark ? "#e2e8f0" : "#333")
       .style("opacity", 0);
 
     g.selectAll("rect")
@@ -92,14 +98,28 @@ function WaitTimeHeatmap({ data }) {
       .tickValues([0, 4, 8, 12, 16, 20])
       .tickFormat(d => `${d}:00`);
 
-    g.append("g")
+    // Add x-axis
+    const xAxisGroup = g.append("g")
       .attr("transform", `translate(0, ${innerHeight})`)
-      .call(xAxis)
-      .selectAll("text")
-      .style("font-size", "10px");
+      .call(xAxis);
 
+    xAxisGroup.selectAll("text")
+      .style("font-size", "10px")
+      .style("fill", textColor);
+
+    xAxisGroup.selectAll(".domain, .tick line")
+      .style("stroke", textColor);
+
+    // Add y-axis
     const yAxis = d3.axisLeft(yScale).tickFormat(d => dayLabels[d]);
-    g.append("g").call(yAxis).selectAll("text").style("font-size", "10px");
+    const yAxisGroup = g.append("g").call(yAxis);
+
+    yAxisGroup.selectAll("text")
+      .style("font-size", "10px")
+      .style("fill", textColor);
+
+    yAxisGroup.selectAll(".domain, .tick line")
+      .style("stroke", textColor);
 
     g.append("text")
       .attr("x", innerWidth / 2)
@@ -107,15 +127,16 @@ function WaitTimeHeatmap({ data }) {
       .attr("text-anchor", "middle")
       .style("font-size", "14px")
       .style("font-weight", "600")
+      .style("fill", titleColor)
       .text("Average Wait Time by Day and Hour");
 
     return () => {
       tooltip.remove();
     };
-  }, [data]);
+  }, [data, isDark]);
 
   return (
-    <div style={{ background: "#ffffff", borderRadius: "12px", padding: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
+    <div className="rounded-xl p-4 summary-card">
       <svg ref={svgRef} style={{ width: "100%", height: "320px" }} />
     </div>
   );

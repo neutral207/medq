@@ -4,6 +4,8 @@ import WaitTimeHeatmap from "../components/WaitTimeHeatmap";
 import { exportToCsv } from "../utils/exportCsv";
 import StaffUtilizationPanel from "../components/StaffUtilizationPanel";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
+
 function Dashboard() {
   const [metrics, setMetrics] = useState(null);
   const [heatmapData, setHeatmapData] = useState([]);
@@ -34,9 +36,9 @@ function Dashboard() {
       const qs = buildQueryString();
 
       const [summaryRes, heatmapRes, staffRes] = await Promise.all([
-        fetch(`http://localhost:5000/api/summary${qs}`),
-        fetch(`http://localhost:5000/api/wait_heatmap${qs}`),
-        fetch(`http://localhost:5000/api/staff_utilization${qs}`),
+        fetch(`${API_BASE}/summary${qs}`),
+        fetch(`${API_BASE}/wait_heatmap${qs}`),
+        fetch(`${API_BASE}/staff_utilization${qs}`),
       ]);
 
       if (!summaryRes.ok) throw new Error("Summary request failed");

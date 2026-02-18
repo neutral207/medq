@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 import medqLogo from "../assets/images/medq-logo.png";
+import ThemeToggle from "../components/ThemeToggle";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -53,7 +54,12 @@ export default function StaffLogin() {
   }
 
   return (
-    <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
+    <div className="page-gradient grid grid-rows-[auto,1fr] overflow-y-auto relative">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
+
       {/* Header */}
       <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 sm:mb-6">
         <img
@@ -61,12 +67,12 @@ export default function StaffLogin() {
           alt="Med-Q logo"
           className="block h-32 object-contain drop-shadow-lg"
         />
-        <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">Staff Login</h1>
+        <h1 className="text-2xl md:text-[42px] tracking-wide leading-tight">Staff Login</h1>
       </header>
 
       {/* Form */}
       <div className='px-6 flex justify-center py-8 md:py-12'>
-        <form className="w-[360px] space-y-4 text-[15px] font-medium" onSubmit={handleSubmit}>
+        <form className="w-full max-w-[360px] space-y-4 text-[15px] font-medium" onSubmit={handleSubmit}>
 
           {/* Username */}
           <div className="space-y-1">
@@ -75,7 +81,7 @@ export default function StaffLogin() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
+                className="w-full rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none"
                 placeholder="Enter your username"
                 required
                 disabled={loading}
@@ -90,7 +96,7 @@ export default function StaffLogin() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
+                className="w-full rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none"
                 placeholder="Enter your password"
                 required
                 disabled={loading}
