@@ -263,18 +263,14 @@ export default function PatientDetails() {
               <h3 className="heading-3 mb-2">Assigned Staff</h3>
               {visit.assigned_staff_name ? (
                 <div className="flex items-center gap-2 text-sm">
+                  <span>{visit.assigned_staff_name}</span>
                   <span
                     className={`${
                       ROLE_COLORS[visit.assigned_staff_role] || "bg-gray-500"
                     } text-xs px-2 py-0.5 rounded-full`}
                   >
-                    {visit.assigned_staff_role === "physician" || visit.assigned_staff_role === "doctor"
-                      ? "Doctor"
-                      : visit.assigned_staff_role === "nurse"
-                      ? "Nurse"
-                      : "Staff"}
+                    {visit.assigned_staff_role}
                   </span>
-                  <span>{visit.assigned_staff_name}</span>
                 </div>
               ) : (
                 <p className="text-empty text-sm">Not yet assigned</p>
