@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
 import { apiRequest } from "../apiClient";
+import ThemeToggle from "../components/ThemeToggle";
 
 const REASONS = [
   "Fever", "Cough", "Headache", "Chest pain", "Shortness of breath",
@@ -108,7 +109,8 @@ export default function PatientCheckIn() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || "Failed to check in");
+        const errorMsg = typeof errorData.error === 'string' ? errorData.error : "Failed to check in";
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();
@@ -130,25 +132,31 @@ export default function PatientCheckIn() {
       });
     } catch (err) {
       console.error(err);
-      setError(err.message || "Error submitting check-in.");
+      const errorMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err)) || "Error submitting check-in.";
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid grid-rows-[auto,1fr] bg-gradient-to-b from-medqDark to-medqDeep text-white overflow-y-auto">
+    <div className="page-gradient grid grid-rows-[auto,1fr] overflow-y-auto relative">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
+
       {/* Header */}
       <header className="pt-6 pb-0 flex flex-col items-center pointer-events-none sm:gap-1 mb-4 sm:mb-6">
         <img src={medqLogo} alt="Med-Q Logo" className="block h-32 object-contain drop-shadow-lg" />
-        <h1 className="text-2xl md:text-[42px] tracking-wide text-white leading-tight">Med-Q</h1>
+        <h1 className="text-2xl md:text-[42px] tracking-wide leading-tight">Med-Q</h1>
       </header>
 
       {/* Form */}
       <main className="px-6 flex justify-center py-8 md:py-12">
         <form
           onSubmit={handleSubmit}
-          className="w-[360px] space-y-4 text-[15px] font-medium"
+          className="w-full max-w-[360px] space-y-4 text-[15px] font-medium"
         >
           <h2 className="text-lg font-semibold leading-snug mb-4">
             Welcome. Please fill out the following so we can better give the care you need.
@@ -164,7 +172,7 @@ export default function PatientCheckIn() {
                 placeholder="Last M First"
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 placeholder-white/50 focus:border-medqPink outline-none"
+                className="w-full rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none"
                 required
               />
             </label>
@@ -179,7 +187,7 @@ export default function PatientCheckIn() {
                 name="dob"
                 value={formData.dob}
                 onChange={handleChange}
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white/50 focus:border-medqPink outline-none uppercase"
+                className="w-full rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none uppercase"
                 required
               />
             </label>
@@ -192,8 +200,7 @@ export default function PatientCheckIn() {
               <button
                 type="button"
                 onClick={openReasonList}
-                className="w-full text-left rounded-md bg-transparent border border-white/30 px-3 py-2
-                           text-white/50 hover:text-white focus:border-medqPink outline-none"
+                className="w-full text-left rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none"
                 aria-haspopup="listbox"
                 aria-expanded={isReasonOpen}
               >
@@ -215,7 +222,7 @@ export default function PatientCheckIn() {
                 onBlur={closeReasonList}
                 onKeyDown={(e) => e.key === "Escape" && closeReasonList()}
                 size={8}
-                className="w-full rounded-md bg-transparent text-white border border-white/30 py-2 pl-3"
+                className="w-full rounded-md input-form border py-2 pl-3"
                 required
               >
                 <option value="" disabled>Select a reason...</option>
@@ -232,8 +239,7 @@ export default function PatientCheckIn() {
                 value={formData.customReason || ""}
                 onChange={handleChange}
                 placeholder="Briefly describe your reason"
-                className="mt-2 w-full rounded-md bg-transparent border border-white/30 text-white/50
-                placeholder-white/50 focus:outline-none focus:border-medqPink px-3 py-2"
+                className="mt-2 w-full rounded-md input-form border focus:outline-none focus:border-medqPink px-3 py-2"
                 required
               />
             )}
@@ -249,7 +255,7 @@ export default function PatientCheckIn() {
                 placeholder="(123) 456-7890"
                 value={formData.phone}
                 onChange={handleChange}
-                className="w-full rounded-md bg-transparent border border-white/30 px-3 py-2 text-white placeholder-white/50 focus:border-medqPink outline-none"
+                className="w-full rounded-md input-form border px-3 py-2 focus:border-medqPink outline-none"
                 required
               />
             </label>
