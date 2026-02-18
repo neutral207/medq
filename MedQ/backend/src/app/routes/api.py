@@ -88,7 +88,8 @@ def get_queue():
                     p.symptoms,
                     v.checkin_time,
                     v.predicted_wait_minutes,
-                    d.name as department
+                    d.name as department,
+                    (SELECT COUNT(*) FROM visit_notes vn WHERE vn.visit_id = v.visit_id) AS note_count
                 FROM visits v
                 JOIN patients p ON p.patient_id = v.patient_id
                 JOIN departments d ON d.dept_id = v.dept_id
@@ -114,6 +115,7 @@ def get_queue():
             "checkin_time": row["checkin_time"].isoformat() if row["checkin_time"] else None,
             "predicted_wait_minutes": row["predicted_wait_minutes"],
             "department": row["department"],
+            "note_count": row["note_count"],
         }
         for row in rows
     ]
@@ -459,6 +461,20 @@ def update_visit_status(visit_id):
             current = cur.fetchone()
             if not current:
                 raise ApiError(f"Visit not found: {visit_id}", code=404)
+
+            # Require at least one note before completing a visit
+            if new_status == "completed":
+                cur.execute(
+                    "SELECT COUNT(*) AS cnt FROM visit_notes WHERE visit_id = %s",
+                    (visit_id,),
+                )
+                note_row = cur.fetchone()
+                note_count = note_row["cnt"] if note_row else 0
+                if note_count == 0:
+                    raise ApiError(
+                        "Cannot complete visit without at least one note",
+                        code=400,
+                    )
 
             now = datetime.now(timezone.utc)
 
@@ -900,3 +916,153 @@ def staff_performance():
         "staffMetrics": staff_metrics,
     }), 200
 
+
+@api_bp.get("/visit/<visit_id>/notes")
+@token_required
+def get_visit_notes(visit_id):
+    """Get all notes for a visit (any authenticated staff)."""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    n.note_id,
+                    n.content,
+                    n.created_at,
+                    n.staff_id,
+                    sa.full_name AS staff_name,
+                    sa.role AS staff_role
+                FROM visit_notes n
+                JOIN staff_auth sa ON sa.staff_id = n.staff_id
+                WHERE n.visit_id = %s
+                ORDER BY n.created_at DESC;
+                """,
+                (visit_id,),
+            )
+            rows = cur.fetchall()
+    
+    notes = [
+        {
+            "note_id": row["note_id"],
+            "content": row["content"],
+            "staff_id": row["staff_id"],
+            "staff_name": row["staff_name"],
+            "staff_role": row["staff_role"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        }
+        for row in rows
+    ]
+
+    return jsonify({"notes": notes}), 200
+
+@api_bp.post("/visit/<visit_id>/notes")
+@token_required
+@role_required("nurse", "doctor", "physician", "admin")
+def add_visit_note(visit_id):
+    """Add a note to a visit."""
+    if not request.is_json:
+        raise ApiError("Content-Type must be application/json", code=415)
+    
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+
+    if not content:
+        raise ApiError("content is required", code=400)
+    
+    staff_id = request.current_user["staff_id"]
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                INSERT INTO visit_notes (visit_id, staff_id, content)
+                VALUES (%s, %s, %s)
+                RETURNING note_id, content, created_at;
+                """,
+                (visit_id, staff_id, content),
+            )
+            row  = cur.fetchone()
+            conn.commit()
+    
+    # Emit webSocket event
+    try:
+        socketio = get_socketio()
+        socketio.emit("notes_update", {"visit_id": visit_id})
+    except Exception as e:
+        print(f"Failed to emit notes_update: {e}")
+
+    return jsonify({
+        "note_id": row["note_id"],
+        "content": row["content"],
+        "staff_id": staff_id,
+        "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+    }), 201
+
+@api_bp.patch("/visit/<visit_id>/notes/<int:note_id>")
+@token_required
+@role_required("nurse", "doctor", "physician", "admin")
+def edit_visit_note(visit_id, note_id):
+    """Edit a note (only the author can edit)."""
+    if not request.is_json:
+        raise ApiError("Content-Type must be application/json", code=415)
+    
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()
+
+    if not content:
+        raise ApiError("content is required", code=400)
+    
+    staff_id = request.current_user["staff_id"]
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT staff_id FROM visit_notes WHERE note_id = %s AND visit_id = %s",
+                (note_id, visit_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ApiError("Note not found", code=404)
+            if row["staff_id"] != staff_id:
+                raise ApiError("You can only edit your own notes", code=403)
+            
+            cur.execute(
+                """
+                UPDATE visit_notes SET content = %s
+                WHERE note_id = %s
+                RETURNING note_id, content, created_at;
+                """,
+                (content, note_id),
+            )
+            updated = cur.fetchone()
+            conn.commit()
+
+    return jsonify({
+        "note_id": updated["note_id"],
+        "content": updated["content"],
+        "created_at": updated["created_at"].isoformat() if updated["created_at"] else None,
+    }), 200
+
+@api_bp.delete("/visit/<visit_id>/notes/<int:note_id>")
+@token_required
+@role_required("nurse", "doctor", "physician", "admin")
+def delete_visit_note(visit_id, note_id):
+    """Delete a note (only the author can delete)."""
+    staff_id = request.current_user["staff_id"]
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT staff_id FROM visit_notes WHERE note_id = %s AND visit_id = %s",
+                (note_id, visit_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ApiError("Note not found", code=404)
+            if row["staff_id"] != staff_id:
+                raise ApiError("You can only delete your own notes", code=403)
+            
+            cur.execute("DELETE FROM visit_notes WHERE note_id = %s", (note_id,))
+            conn.commit()
+    
+    return jsonify({"message": "Note deleted"}), 200
