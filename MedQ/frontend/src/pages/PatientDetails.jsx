@@ -44,9 +44,6 @@ export default function PatientDetails() {
   const [visit, setVisit] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [statusError, setStatusError] = useState("");
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-
   const [notes, setNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [newNote, setNewNote] = useState("");
@@ -105,28 +102,6 @@ export default function PatientDetails() {
       navigate(-1);
     }
   };
-
-  async function updateStatus(newStatus) {
-    if (!visit || visit.status === newStatus) return;
-    setStatusError("");
-    setUpdatingStatus(true);
-
-    const previousStatus = visit.status;
-    setVisit((prev) => ({ ...prev, status: newStatus }));
-
-    try {
-      await apiRequest(`/visit/${encodeURIComponent(id)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusError(err.message || "Error updating status.");
-      setVisit((prev) => ({ ...prev, status: previousStatus }));
-    } finally {
-      setUpdatingStatus(false);
-    }
-  }
 
   async function handleAddNote() {
     if (!newNote.trim()) return;
