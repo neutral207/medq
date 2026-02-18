@@ -26,7 +26,17 @@ STATUSES = ["Checked-In", "Waiting", "In Progress", "Completed", "Cancelled"]
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)
+    CORS(app, resources={
+         r"/api/*": {
+            "origins": [
+            "http://localhost:5173",           # Local dev
+            "http://localhost:3000",           # Local dev
+            "https://medq-peach.vercel.app/"  # Your Vercel URL
+            ], 
+            "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+         }
+    })
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
 
     # JWT (you can hook into this later)
