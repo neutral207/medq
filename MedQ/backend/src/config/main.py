@@ -31,7 +31,7 @@ def create_app():
             "origins": [
             "http://localhost:5173",           # Local dev
             "http://localhost:3000",           # Local dev
-            "medq-git-deployment-joel-simpsons-projects.vercel.app",  # Vercel URL
+            "https://medq-peach.vercel.app/",  # Vercel URL
             "https://medq.onrender.com/"
 
             ], 
