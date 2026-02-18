@@ -31,7 +31,9 @@ def create_app():
             "origins": [
             "http://localhost:5173",           # Local dev
             "http://localhost:3000",           # Local dev
-            "https://medq-peach.vercel.app/"  # Your Vercel URL
+            "medq-git-deployment-joel-simpsons-projects.vercel.app",  # Vercel URL
+            "https://medq.onrender.com/"
+
             ], 
             "methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
