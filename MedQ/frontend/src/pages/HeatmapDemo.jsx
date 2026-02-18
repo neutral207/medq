@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import WaitTimeHeatmap from "../components/WaitTimeHeatmap";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
+
 function HeatmapDemo() {
   const [data, setData] = useState([]);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const res = await fetch("http://localhost:5000/api/wait_heatmap");
+        const res = await fetch(`${API_BASE}/wait_heatmap`);
         const json = await res.json();
         console.log("Heatmap data:", json);
         setData(json);
