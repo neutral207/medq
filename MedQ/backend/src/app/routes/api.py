@@ -65,7 +65,10 @@ def parse_dob_mmddyyyy(value):
         raise ApiError("dob must be in MM/DD/YYYY format", code=400)
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(
+        os.getenv(DATABASE_URL),
+        sslmode='require'
+        )
 
 @api_bp.get("/queue")
 @token_required
