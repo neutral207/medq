@@ -128,6 +128,17 @@ CREATE TABLE IF NOT EXISTS user_roles (
   PRIMARY KEY (user_id, role_id)
 );
 
+CREATE TABLE IF NOT EXISTS staff_shift_log (
+  id BIGSERIAL PRIMARY KEY,
+  staff_id BIGINT NOT NULL,
+  dept_id BIGINT,
+  in_service BOOLEAN NOT NULL DEFAULT FALSE,
+  ts TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_staff_shift_log_ts ON staff_shift_log(ts);
+CREATE INDEX IF NOT EXISTS idx_staff_shift_log_dept_ts ON staff_shift_log(dept_id, ts);
+
 -- Indexes for performance optimization
 
 -- Fast lookups of queued visits by department and time
