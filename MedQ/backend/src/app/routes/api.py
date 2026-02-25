@@ -185,16 +185,14 @@ def check_in():
         raise ApiError("name is required", code=400)
 
     def get_staff_in_service(conn, dept_id):
-        # fallback if you do not have hourly agg populated yet
+        # Count staff currently serving patients (in-progress visits assigned to them)
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT COALESCE(in_service, 0) AS in_service
-                    FROM wait_time_agg_hourly
-                    WHERE dept_id = %s
-                    ORDER BY bucket_start DESC
-                    LIMIT 1
+                    SELECT COUNT(DISTINCT v.assigned_staff)::int AS in_service
+                    FROM visits v
+                    WHERE v.dept_id = %s AND v.status = 'in-progress' AND v.assigned_staff IS NOT NULL
                     """,
                     (dept_id,),
                 )
@@ -203,7 +201,7 @@ def check_in():
                     return int(row["in_service"] or 0)
         except Exception:
             pass
-        return 3  # default fallback
+        return 0  # default fallback
 
     def get_queue_length_today(conn, dept_id):
         try:
@@ -962,53 +960,29 @@ def wait_heatmap():
 def staff_utilization():
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # detect column options for on-duty / in-service
             cur.execute(
                 """
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='staff' AND column_name IN
-                  ('is_active','active','on_duty','is_on_duty','in_service','is_in_service');
-                """
-            )
-            cols = {r["column_name"] for r in cur.fetchall()}
-
-            active_expr = None
-            if "is_active" in cols:
-                active_expr = "s.is_active"
-            elif "active" in cols:
-                active_expr = "s.active"
-            elif "on_duty" in cols:
-                active_expr = "s.on_duty"
-            elif "is_on_duty" in cols:
-                active_expr = "s.is_on_duty"
-            else:
-                active_expr = "TRUE"
-
-            in_service_expr = None
-            if "in_service" in cols:
-                in_service_expr = "s.in_service"
-            elif "is_in_service" in cols:
-                in_service_expr = "s.is_in_service"
-            else:
-                in_service_expr = "FALSE"
-
-            cur.execute(
-                f"""
                 SELECT
                   d.name AS department,
-                  COUNT(*)::int AS staff_total,
-                  SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::int AS active_staff,
-                  SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::int AS in_service_now,
+                  COUNT(DISTINCT s.staff_id)::int AS staff_total,
+                  SUM(CASE WHEN s.active THEN 1 ELSE 0 END)::int AS active_staff,
+                  COUNT(DISTINCT CASE 
+                    WHEN v.status = 'in-progress' AND v.assigned_staff = s.staff_id 
+                    THEN s.staff_id 
+                  END)::int AS in_service_now,
                   CASE
-                    WHEN SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END) = 0 THEN 0
+                    WHEN SUM(CASE WHEN s.active THEN 1 ELSE 0 END) = 0 THEN 0
                     ELSE ROUND(
-                      (SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::numeric /
-                       SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::numeric) * 100, 2
+                      (COUNT(DISTINCT CASE 
+                        WHEN v.status = 'in-progress' AND v.assigned_staff = s.staff_id 
+                        THEN s.staff_id 
+                      END)::numeric /
+                       SUM(CASE WHEN s.active THEN 1 ELSE 0 END)::numeric) * 100, 2
                     )
                   END AS utilization_pct
                 FROM staff s
                 JOIN departments d ON d.dept_id = s.dept_id
+                LEFT JOIN visits v ON v.assigned_staff = s.staff_id AND v.dept_id = s.dept_id
                 GROUP BY d.name
                 ORDER BY d.name;
                 """
