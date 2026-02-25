@@ -15,9 +15,7 @@ from src.app.routes.staff_management import staff_mgmt_bp
 from src.app.routes.auth import auth_bp
 
 # Global Socket.IO instance
-# CORS origins can be restricted via CORS_ORIGINS environment variable
-cors_origins = os.environ.get("CORS_ORIGINS", "*")
-socketio = SocketIO(cors_allowed_origins=cors_origins)
+socketio = SocketIO(cors_allowed_origins="*")
 
 # In-memory placeholder database
 visits_db: Dict[str, Dict] = {}
@@ -28,25 +26,8 @@ STATUSES = ["Checked-In", "Waiting", "In Progress", "Completed", "Cancelled"]
 
 def create_app():
     app = Flask(__name__)
-    
-    # Configure CORS with environment variable support
-    cors_origins = os.environ.get("CORS_ORIGINS", "*")
-    if cors_origins == "*":
-        CORS(app)
-    else:
-        # Parse comma-separated origins
-        allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
-        CORS(app, origins=allowed_origins)
-    
-    # SECRET_KEY must be set in production for session security
-    secret_key = os.environ.get("SECRET_KEY")
-    if not secret_key:
-        # Generate a random key for development only
-        import sys
-        if "pytest" not in sys.modules:  # Allow tests to run without SECRET_KEY
-            print("WARNING: SECRET_KEY not set. Using random key (will invalidate tokens on restart)")
-        secret_key = os.urandom(32)
-    app.config["SECRET_KEY"] = secret_key
+    CORS(app)
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(32))
 
     # JWT (you can hook into this later)
     jwt = JWTManager(app)
@@ -252,7 +233,7 @@ def create_app():
 
 # Create app and bind Socket.IO
 app = create_app()
-socketio.init_app(app, cors_allowed_origins=cors_origins)
+socketio.init_app(app, cors_allowed_origins="*")
 
 # Dev entrypoint
 if __name__ == "__main__":
