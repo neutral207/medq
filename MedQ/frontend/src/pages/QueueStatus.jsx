@@ -18,6 +18,7 @@ export default function QueueStatus() {
   const [checkinTime, setCheckinTime] = useState(null);
   const [lastUpdated, setLastUpdated] = useState("");
   const [statusError, setStatusError] = useState("");
+  const [soundPlayed, setSoundPlayed] = useState(false);
 
   const startingSeconds = useMemo(() => {
     const mins = Number(estWaitMinutes);
@@ -37,6 +38,13 @@ export default function QueueStatus() {
 
   const [secondsLeft, setSecondsLeft] = useState(startingSeconds);
 
+  const isNearlyCalled = useMemo(() => {
+    if (queuePosition == null && secondsLeft <= 0) return false;
+    const closeByPosition = queuePosition != null && Number(queuePosition) <= 2;
+    const closeByTime = secondsLeft > 0 && secondsLeft <= 5 * 60;
+    return closeByPosition && closeByTime;
+  }, [queuePosition, secondsLeft]);
+
   useEffect(() => {
     setSecondsLeft(startingSeconds);
   }, [startingSeconds]);
@@ -50,6 +58,37 @@ export default function QueueStatus() {
 
     return () => clearInterval(timer);
   }, [secondsLeft]);
+
+  useEffect(() => {
+    if (!isNearlyCalled || soundPlayed) return;
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioContext.currentTime;
+      const notes = [
+        { freq: 523.25, duration: 0.2 },
+        { freq: 659.25, duration: 0.2 },
+        { freq: 783.99, duration: 0.4 },
+      ];
+
+      notes.forEach((note, index) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+
+        osc.frequency.value = note.freq;
+        gain.gain.setValueAtTime(0.3, now + 0.05 * index);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05 * index + note.duration);
+
+        osc.start(now + 0.05 * index);
+        osc.stop(now + 0.05 * index + note.duration);
+      });
+
+      setSoundPlayed(true);
+    } catch (err) {
+      console.warn("Alert sound blocked:", err);
+    }
+  }, [isNearlyCalled, soundPlayed]);
 
   function formatTime(totalSeconds) {
     const s = Math.max(0, Number(totalSeconds) || 0);
@@ -196,6 +235,17 @@ export default function QueueStatus() {
             <p className="subtitle">Track your position and estimated wait time</p>
           </div>
         </header>
+
+        {isNearlyCalled && (
+          <div className="mb-6 bg-green-500/20 border border-green-400 rounded-xl p-4 shadow-md">
+            <div className="text-green-300 font-semibold text-lg text-center">
+              You're Almost Next!
+            </div>
+            <p className="text-green-200 text-sm text-center mt-1">
+              You'll be called soon. Please be ready!
+            </p>
+          </div>
+        )}
 
         <div className="card-info rounded-2xl p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
