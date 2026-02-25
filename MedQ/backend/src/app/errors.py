@@ -7,16 +7,16 @@ class ApiError(HTTPException):
     def __init__(self, message=None, code=400, extra=None):
         if code: self.code = code
         self.extra = extra or {}
-        self.message = message or self.description
+        self.message = message
         super().__init__(self.message)
 
 def error_response(message, code=400, **extra):
-    return jsonify({"error": message}), code
+    return jsonify({"error": {"message": message, "code": code, **extra}}), code
 
 def register_error_handlers(app):
     @app.errorhandler(ApiError)
-    def handle_api_error(error):
-        return error_response(error.message, error.code)
+    def _api(err: ApiError):
+        return error_response(err.description, err.code, **err.extra)
 
     @app.errorhandler(404)
     def _404(_):
@@ -26,3 +26,9 @@ def register_error_handlers(app):
     def _500(err):
         app.logger.exception(err)
         return error_response("Internal server error", 500)
+    
+    @app.errorhandler(ApiError)
+    def handle_api_error(error):
+        response = jsonify({"error": error.message})
+        response.status_code = error.code
+        return response

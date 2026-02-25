@@ -3,14 +3,12 @@ import io from "socket.io-client";
 
 const WebSocketContext = createContext(null);
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
 export function WebSocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const newSocket = io(API_URL, {
+    const newSocket = io("http://localhost:5000", {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
