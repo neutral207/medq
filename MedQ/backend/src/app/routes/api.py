@@ -65,10 +65,11 @@ def parse_dob_mmddyyyy(value):
         raise ApiError("dob must be in MM/DD/YYYY format", code=400)
 
 def get_conn():
-    return psycopg2.connect(
-        os.getenv(DATABASE_URL),
-        sslmode='require'
-        )
+    db_url = DATABASE_URL or "postgresql://postgres:postgres@localhost:5432/medq"
+    # Only use sslmode=require if using a production database URL
+    if DATABASE_URL and ('amazonaws.com' in DATABASE_URL or 'render.com' in DATABASE_URL):
+        return psycopg2.connect(db_url, sslmode='require')
+    return psycopg2.connect(db_url)
 
 @api_bp.get("/queue")
 @token_required

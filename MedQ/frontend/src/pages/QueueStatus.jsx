@@ -124,7 +124,7 @@ export default function QueueStatus() {
       setStatusError("");
 
       try {
-        const data = await apiRequest(`/visit/${visitId}`);
+        const data = await apiRequest(`/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`);
         const visit = data?.visit;
 
         if (!visit) {
