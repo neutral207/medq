@@ -256,6 +256,33 @@ button:focus {
   @apply text-slate-700;
 }
 
+/* Note textarea for patient details */
+.dark .note-textarea {
+  @apply bg-transparent border-white/20 text-white placeholder-slate-400;
+}
+
+.light .note-textarea {
+  @apply bg-slate-50 border-slate-300 text-medqLightText placeholder-slate-400;
+}
+
+/* Label text (field names like "Name", "Phone") */
+.dark .text-label {
+  @apply text-slate-400;
+}
+
+.light .text-label {
+  @apply text-slate-500;
+}
+
+/* Content text (field values, note body) */
+.dark .text-content {
+  @apply text-slate-200;
+}
+
+.light .text-content {
+  @apply text-slate-700;
+}
+
 /* Utilization card backgrounds */
 .dark .utilization-card {
   @apply bg-slate-700/50;
