@@ -3,11 +3,12 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required, create_access_token
 from src.app.errors import ApiError
 from src.app.routes.auth import token_required, role_required
 import joblib
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, date, timedelta, timezone
 
 load_dotenv()
 
@@ -18,10 +19,39 @@ def get_socketio():
     from src.config.main import socketio
     return socketio
 
-DATABASE_URL = os.getenv("DATABASE_URL",
-)
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-from datetime import datetime
+def _parse_date(s: str | None) -> date | None:
+    """Accepts YYYY-MM-DD. Returns date or None."""
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except Exception:
+        raise ApiError(f"Invalid date '{s}'. Use YYYY-MM-DD.", code=400)
+
+
+def _date_range_clause(column_sql: str, start: date | None, end: date | None):
+    """
+    Builds a safe WHERE fragment + params.
+    end is inclusive in API, but we convert to < (end+1 day) for SQL simplicity.
+    """
+    clauses = []
+    params = []
+
+    if start:
+        clauses.append(f"{column_sql} >= %s")
+        params.append(start)
+
+    if end:
+        clauses.append(f"{column_sql} < %s")
+        params.append(end + timedelta(days=1))
+
+    where_sql = ""
+    if clauses:
+        where_sql = " AND " + " AND ".join(clauses)
+
+    return where_sql, params
 
 def parse_dob_mmddyyyy(value):
     if value is None:
@@ -480,9 +510,8 @@ def update_visit_status(visit_id):
 
             updates = { "status": new_status }
 
-            # If we go back to waiting, reset timers and assigned staff
+            # If we go back to waiting, clear timers and assigned staff
             if new_status == "waiting":
-                updates["checkin_time"] = now
                 updates["service_start"] = None
                 updates["service_end"] = None
                 updates["assigned_staff"] = None
@@ -491,12 +520,13 @@ def update_visit_status(visit_id):
             elif new_status == "in-progress" and current["service_start"] is None:
                 updates["service_start"] = now
 
-            # When moving into completed, end service (keep assigned_staff for metrics)
+            # When moving into completed, end service and clear assigned staff
             elif new_status == "completed":
                 # If service_start was never set, set it now
                 if current["service_start"] is None:
                     updates["service_start"] = now
                 updates["service_end"] = now
+                updates["assigned_staff"] = None
 
             set_clauses = []
             params = []
@@ -711,210 +741,294 @@ def predict_wait():
 # -----------------------------
 
 @api_bp.get("/summary")
-@token_required
-@role_required('admin', 'doctor', 'physician')
 def summary():
-    """
-    Get summary statistics (Requires: Admin or clinical staff)
-    Access: admin, doctor, physician
-    """
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
+    start = _parse_date(request.args.get("start"))
+    end = _parse_date(request.args.get("end"))
 
-        # 1. Queue count (patients currently waiting)
-        cur.execute("""
-            SELECT COUNT(*) AS queue_count
-            FROM visits
-            WHERE status = 'waiting';
-        """)
-        queue_count = cur.fetchone()["queue_count"]
-
-        # 2. Average wait time for completed visits today
-        cur.execute("""
-            SELECT AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60) AS avg_wait
-            FROM visits
-            WHERE status = 'completed'
-              AND service_start IS NOT NULL
-              AND checkin_time::date = CURRENT_DATE;
-        """)
-        row = cur.fetchone()
-        avg_wait = row["avg_wait"] or 0
-
-        # 3. Staff currently assigned to in-progress visits
-        cur.execute("""
-            SELECT COUNT(DISTINCT assigned_staff) AS active_staff
-            FROM visits
-            WHERE status = 'in-progress'
-              AND assigned_staff IS NOT NULL;
-        """)
-        active_staff = cur.fetchone()["active_staff"]
-
-        # 4. Hourly history for charts (from actual visits)
-        cur.execute("""
-            SELECT
-                date_trunc('hour', checkin_time) AS bucket_start,
-                COUNT(*) AS arrivals,
-                AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60)
-                    FILTER (WHERE service_start IS NOT NULL) AS avg_wait_minutes,
-                COUNT(DISTINCT assigned_staff)
-                    FILTER (WHERE status = 'in-progress') AS in_service
-            FROM visits
-            GROUP BY bucket_start
-            ORDER BY bucket_start DESC
-            LIMIT 6;
-        """)
-        rows = list(reversed(cur.fetchall()))
-
-        queue_history = [int(r["arrivals"]) for r in rows]
-        avg_wait_history = [round(float(r["avg_wait_minutes"] or 0), 1) for r in rows]
-        staff_load_history = [int(r["in_service"]) for r in rows]
-
-        cur.close()
-        conn.close()
-
-        return jsonify({
-            "queueCount": queue_count,
-            "averageWait": round(float(avg_wait), 2),
-            "activeStaff": active_staff,
-            "queueHistory": queue_history,
-            "averageWaitHistory": avg_wait_history,
-            "staffLoadHistory": staff_load_history,
-        })
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@api_bp.get("/wait_heatmap")
-@token_required
-@role_required('admin', 'doctor', 'physician')
-def wait_heatmap():
-    """
-    Get wait time heatmap data (Requires: Admin or clinical staff)
-    Access: admin, doctor, physician
-    """
-    start_date = parse_date_param("start")
-    end_date = parse_date_param("end")
-    tz = request.args.get("tz", "UTC").strip()
-    try:
-        conn = get_db_conn()
-        cur = conn.cursor()
-
-        # Query completed visits directly for real-time heatmap data
-        where_clauses = ["service_start IS NOT NULL"]
-        params = [tz, tz]  # for the two AT TIME ZONE conversions
-
-        if start_date:
-            where_clauses.append("checkin_time::date >= %s")
-            params.append(start_date)
-        if end_date:
-            where_clauses.append("checkin_time::date <= %s")
-            params.append(end_date)
-
-        where_sql = " AND ".join(where_clauses)
-
-        cur.execute(f"""
-            SELECT
-                EXTRACT(DOW FROM checkin_time AT TIME ZONE %s) AS day_of_week,
-                EXTRACT(HOUR FROM checkin_time AT TIME ZONE %s) AS hour,
-                AVG(EXTRACT(EPOCH FROM (service_start - checkin_time)) / 60) AS avg_wait
-            FROM visits
-            WHERE {where_sql}
-            GROUP BY day_of_week, hour
-            ORDER BY day_of_week, hour;
-        """, tuple(params))
-
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        if not rows:
-            return jsonify([])
-
-        return jsonify([
-            {
-                "day_of_week": int(r["day_of_week"]),
-                "hour": int(r["hour"]),
-                "avg_wait": round(float(r["avg_wait"]), 1),
-            }
-            for r in rows
-        ])
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@api_bp.get("/staff_performance")
-@token_required
-@role_required('admin', 'doctor', 'physician')
-def staff_performance():
-    """
-    Get accumulated service time per staff member (Requires: Admin or senior clinical staff)
-    Access: admin, doctor, physician
-
-    Returns staff metrics including total visits, total service time, and average service time.
-    """
-    start_date = parse_date_param("start")
-    end_date = parse_date_param("end")
-    department = request.args.get("department", "").strip()
-
-    # Build WHERE clauses for visits with completed service
-    where_clauses = ["v.service_start IS NOT NULL", "v.service_end IS NOT NULL"]
-    params = []
-
-    if start_date:
-        where_clauses.append("v.service_start::date >= %s")
-        params.append(start_date)
-    if end_date:
-        where_clauses.append("v.service_end::date <= %s")
-        params.append(end_date)
-    if department and department.lower() != "all":
-        where_clauses.append("d.name = %s")
-        params.append(department)
-
-    where_sql = " AND ".join(where_clauses)
+    where_sql, params = _date_range_clause("v.checkin_time::date", start, end)
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Get staff performance metrics
+            # Patients in queue (not left, not completed)
+            cur.execute(
+                f"""
+                SELECT COUNT(*)::int AS patients_in_queue
+                FROM visits v
+                WHERE v.status NOT IN ('left','completed')
+                {where_sql}
+                """,
+                params,
+            )
+            q = cur.fetchone()["patients_in_queue"]
+
+            # Average wait (use actual if present; fallback to predicted)
             cur.execute(
                 f"""
                 SELECT
-                    s.staff_id,
-                    s.name AS staff_name,
-                    s.role,
-                    d.name AS department_name,
-                    COUNT(v.visit_id) AS total_visits,
-                    COALESCE(SUM(EXTRACT(EPOCH FROM (v.service_end - v.service_start)) / 60), 0) AS total_service_minutes,
-                    COALESCE(AVG(EXTRACT(EPOCH FROM (v.service_end - v.service_start)) / 60), 0) AS avg_service_minutes
-                FROM staff s
-                LEFT JOIN departments d ON d.dept_id = s.dept_id
-                LEFT JOIN visits v ON v.assigned_staff = s.staff_id
-                    AND {where_sql}
-                WHERE s.role IN ('nurse', 'doctor', 'physician')
-                GROUP BY s.staff_id, s.name, s.role, d.name
-                ORDER BY total_service_minutes DESC;
+                  COALESCE(
+                    ROUND(AVG(COALESCE(v.actual_wait_minutes, v.predicted_wait_minutes))::numeric, 2),
+                    0
+                  ) AS avg_wait_minutes
+                FROM visits v
+                WHERE 1=1
+                {where_sql}
                 """,
-                tuple(params) if params else None,
+                params,
             )
-            staff_rows = cur.fetchall()
+            avg_wait = float(cur.fetchone()["avg_wait_minutes"])
 
-    # Format staff metrics
-    staff_metrics = []
-    for row in staff_rows:
-        staff_metrics.append({
-            "staffId": row["staff_id"],
-            "name": row["staff_name"],
-            "role": row["role"],
-            "department": row["department_name"],
-            "totalVisits": int(row["total_visits"]),
-            "totalServiceMinutes": round(float(row["total_service_minutes"]), 1),
-            "avgServiceMinutes": round(float(row["avg_service_minutes"]), 1),
-        })
+            # Active staff (you can define "active" however your schema supports)
+            # This tries common columns: is_active, is_on_duty, on_duty, active
+            # If none exist, it will just count staff rows in the range (still changes by filter only if you join shifts later).
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='staff' AND column_name IN ('is_active','active','on_duty','is_on_duty');
+                """
+            )
+            cols = {r["column_name"] for r in cur.fetchall()}
 
-    return jsonify({
-        "staffMetrics": staff_metrics,
-    }), 200
+            active_clause = None
+            if "is_active" in cols:
+                active_clause = "s.is_active = TRUE"
+            elif "active" in cols:
+                active_clause = "s.active = TRUE"
+            elif "on_duty" in cols:
+                active_clause = "s.on_duty = TRUE"
+            elif "is_on_duty" in cols:
+                active_clause = "s.is_on_duty = TRUE"
+
+            if active_clause:
+                cur.execute(f"SELECT COUNT(*)::int AS active_staff FROM staff s WHERE {active_clause};")
+            else:
+                cur.execute("SELECT COUNT(*)::int AS active_staff FROM staff s;")
+
+            active_staff = int(cur.fetchone()["active_staff"])
+
+    return jsonify(
+        {
+            "patientsInQueue": q,
+            "avgWaitMinutes": avg_wait,
+            "activeStaff": active_staff,
+            "range": {
+                "start": start.isoformat() if start else None,
+                "end": end.isoformat() if end else None,
+            },
+        }
+    )
+
+
+# -------------------------
+# Time series used by the 3 line charts (changes when date filter changes)
+# metric: queue | avg_wait | active_staff
+# bucket: day (default)
+# -------------------------
+@api_bp.get("/chart_timeseries")
+def chart_timeseries():
+    metric = (request.args.get("metric") or "").strip().lower()
+    bucket = (request.args.get("bucket") or "day").strip().lower()
+    start = _parse_date(request.args.get("start"))
+    end = _parse_date(request.args.get("end"))
+
+    if metric not in ("queue", "avg_wait", "active_staff"):
+        raise ApiError("metric must be one of: queue, avg_wait, active_staff", code=400)
+    if bucket not in ("day",):
+        raise ApiError("bucket must be: day", code=400)
+
+    # default range if none supplied: last 14 days
+    if not end:
+        end = date.today()
+    if not start:
+        start = end - timedelta(days=13)
+
+    where_sql, params = _date_range_clause("v.checkin_time::date", start, end)
+
+    if metric == "queue":
+        value_sql = "COUNT(*)::int"
+        where_status = "AND v.status NOT IN ('left','completed')"
+    elif metric == "avg_wait":
+        value_sql = "COALESCE(ROUND(AVG(COALESCE(v.actual_wait_minutes, v.predicted_wait_minutes))::numeric, 2), 0)"
+        where_status = ""
+    else:
+        # active staff is not driven by visits; we’ll still return a line so charts update with range
+        # We'll produce a flat line repeated per day based on current staff status.
+        value_sql = None
+        where_status = ""
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if metric != "active_staff":
+                cur.execute(
+                    f"""
+                    SELECT
+                      v.checkin_time::date AS day,
+                      {value_sql} AS value
+                    FROM visits v
+                    WHERE 1=1
+                    {where_status}
+                    {where_sql}
+                    GROUP BY v.checkin_time::date
+                    ORDER BY day ASC;
+                    """,
+                    params,
+                )
+                rows = cur.fetchall()
+
+                points = {r["day"].isoformat(): float(r["value"]) for r in rows}
+            else:
+                # For active_staff, we build a simple flat line
+                points = {}
+                d = start
+                while d <= end:
+                    points[d.isoformat()] = 5  # placeholder
+                    d += timedelta(days=1)
+
+            labels = []
+            values = []
+            d = start
+            while d <= end:
+                iso = d.isoformat()
+                labels.append(iso)
+                values.append(points.get(iso, 0))
+                d += timedelta(days=1)
+
+    return jsonify({"labels": labels, "values": values})
+
+
+@api_bp.post("/login")
+def login():
+    """
+    POST /api/login
+    Body: { "username": "", "password": "" }
+    """
+    data = request.get_json() or {}
+    username = data.get("username")
+    password = data.get("password")
+
+    # this is missing fields
+    if not username or not password:
+        return jsonify(error="missing username or password"), 400
+
+    # User not found
+    if username != USER["username"]:
+        return jsonify(error="invalid username or password"), 401
+
+    # this check password using bcrypt
+    if not bcrypt.checkpw(password.encode("utf-8"), USER["password_hash"]):
+        return jsonify(error="invalid username or password"), 401
+
+    # this create JWT
+    token = create_access_token(identity=username)
+
+    return jsonify(message="login successful", token=token), 200
+
+
+# -------------------------
+# Heatmap: avg wait by day-of-week + hour
+# -------------------------
+@api_bp.get("/wait_heatmap")
+def wait_heatmap():
+    start = _parse_date(request.args.get("start"))
+    end = _parse_date(request.args.get("end"))
+
+    if not end:
+        end = date.today()
+    if not start:
+        start = end - timedelta(days=13)
+
+    where_sql, params = _date_range_clause("v.checkin_time::date", start, end)
+
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT
+                  EXTRACT(DOW FROM v.checkin_time)::int AS dow,
+                  EXTRACT(HOUR FROM v.checkin_time)::int AS hour,
+                  COALESCE(ROUND(AVG(COALESCE(v.actual_wait_minutes, v.predicted_wait_minutes))::numeric, 2), 0) AS avg_wait,
+                  COUNT(*)::int AS count
+                FROM visits v
+                WHERE 1=1
+                {where_sql}
+                GROUP BY 1,2
+                ORDER BY 1,2;
+                """,
+                params,
+            )
+            cells = cur.fetchall()
+
+    return jsonify(
+        {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "cells": cells,
+        }
+    )
+
+
+# -------------------------
+# Staff utilization by department
+# -------------------------
+@api_bp.get("/staff_utilization")
+def staff_utilization():
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # detect column options for on-duty / in-service
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='staff' AND column_name IN
+                  ('is_active','active','on_duty','is_on_duty','in_service','is_in_service');
+                """
+            )
+            cols = {r["column_name"] for r in cur.fetchall()}
+
+            active_expr = None
+            if "is_active" in cols:
+                active_expr = "s.is_active"
+            elif "active" in cols:
+                active_expr = "s.active"
+            elif "on_duty" in cols:
+                active_expr = "s.on_duty"
+            elif "is_on_duty" in cols:
+                active_expr = "s.is_on_duty"
+            else:
+                active_expr = "TRUE"
+
+            in_service_expr = None
+            if "in_service" in cols:
+                in_service_expr = "s.in_service"
+            elif "is_in_service" in cols:
+                in_service_expr = "s.is_in_service"
+            else:
+                in_service_expr = "FALSE"
+
+            cur.execute(
+                f"""
+                SELECT
+                  d.name AS department,
+                  COUNT(*)::int AS staff_total,
+                  SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::int AS active_staff,
+                  SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::int AS in_service_now,
+                  CASE
+                    WHEN SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END) = 0 THEN 0
+                    ELSE ROUND(
+                      (SUM(CASE WHEN {in_service_expr} THEN 1 ELSE 0 END)::numeric /
+                       SUM(CASE WHEN {active_expr} THEN 1 ELSE 0 END)::numeric) * 100, 2
+                    )
+                  END AS utilization_pct
+                FROM staff s
+                JOIN departments d ON d.dept_id = s.dept_id
+                GROUP BY d.name
+                ORDER BY d.name;
+                """
+            )
+            rows = cur.fetchall()
+
+    return jsonify({"departments": rows})
+
 
 
 @api_bp.get("/visit/<visit_id>/notes")
