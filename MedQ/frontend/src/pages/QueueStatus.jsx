@@ -1,65 +1,73 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
-import { apiRequest } from "../apiClient";
-import { QRCodeSVG as QRCode } from "qrcode.react";
+import { useWebSocket } from "../contexts/WebSocketContext";
+import ThemeToggle from "../components/ThemeToggle";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api";
 
 export default function QueueStatus() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { socket } = useWebSocket();
 
-  // Accept data from navigation state OR from query string (QR link use-case)
-  const qs = new URLSearchParams(window.location.search);
-  const state = location.state || {};
-
-  const visitId = state.visitId || qs.get("visitId");
-  const anonToken = state.anonToken || qs.get("token");
-  const departmentFromState = state.department;
-  const initialWaitFromState = state.initialWait;
-  const severityFromState = state.severity;
+  const { visitId, anonToken, department, initialWait, severity } = location.state || {};
 
   const [queuePosition, setQueuePosition] = useState(null);
-  const [estWaitMinutes, setEstWaitMinutes] = useState(initialWaitFromState ?? null);
-  const [department, setDepartment] = useState(departmentFromState ?? "");
-  const [severity, setSeverity] = useState(severityFromState ?? null);
-
+  const [estWaitMinutes, setEstWaitMinutes] = useState(initialWait);
+  const [checkinTime, setCheckinTime] = useState(null);
   const [lastUpdated, setLastUpdated] = useState("");
   const [statusError, setStatusError] = useState("");
   const [soundPlayed, setSoundPlayed] = useState(false);
 
-  // Convert minutes -> seconds for countdown
   const startingSeconds = useMemo(() => {
     const mins = Number(estWaitMinutes);
     if (!Number.isFinite(mins) || mins <= 0) return 0;
+
+    // If we have a checkin time, calculate elapsed time and subtract from predicted wait
+    if (checkinTime) {
+      const checkinDate = new Date(checkinTime);
+      const now = new Date();
+      const elapsedMinutes = (now - checkinDate) / 1000 / 60;
+      const remainingMinutes = Math.max(0, mins - elapsedMinutes);
+      return Math.round(remainingMinutes * 60);
+    }
+
     return Math.round(mins * 60);
-  }, [estWaitMinutes]);
+  }, [estWaitMinutes, checkinTime]);
 
   const [secondsLeft, setSecondsLeft] = useState(startingSeconds);
+
+  const isNearlyCalled = useMemo(() => {
+    if (queuePosition == null && secondsLeft <= 0) return false;
+    const closeByPosition = queuePosition != null && Number(queuePosition) <= 2;
+    const closeByTime = secondsLeft > 0 && secondsLeft <= 5 * 60;
+    return closeByPosition && closeByTime;
+  }, [queuePosition, secondsLeft]);
 
   useEffect(() => {
     setSecondsLeft(startingSeconds);
   }, [startingSeconds]);
 
-  // Countdown tick
   useEffect(() => {
     if (secondsLeft <= 0) return;
+
     const timer = setInterval(() => {
       setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
+
     return () => clearInterval(timer);
   }, [secondsLeft]);
 
-  // Sound alert when almost next
   useEffect(() => {
-    if (queuePosition != null && estWaitMinutes != null && queuePosition <= 2 && estWaitMinutes <= 5 && !soundPlayed) {
-      // Play a cheerful alert sound using Web Audio API
+    if (!isNearlyCalled || soundPlayed) return;
+    try {
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const now = audioContext.currentTime;
-      
-      // Create a short melody/chime
       const notes = [
-        { freq: 523.25, duration: 0.2 },  // C5
-        { freq: 659.25, duration: 0.2 },  // E5
-        { freq: 783.99, duration: 0.4 }   // G5
+        { freq: 523.25, duration: 0.2 },
+        { freq: 659.25, duration: 0.2 },
+        { freq: 783.99, duration: 0.4 },
       ];
 
       notes.forEach((note, index) => {
@@ -67,18 +75,20 @@ export default function QueueStatus() {
         const gain = audioContext.createGain();
         osc.connect(gain);
         gain.connect(audioContext.destination);
-        
+
         osc.frequency.value = note.freq;
         gain.gain.setValueAtTime(0.3, now + 0.05 * index);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05 * index + note.duration);
-        
+
         osc.start(now + 0.05 * index);
         osc.stop(now + 0.05 * index + note.duration);
       });
 
       setSoundPlayed(true);
+    } catch (err) {
+      console.warn("Alert sound blocked:", err);
     }
-  }, [queuePosition, estWaitMinutes, soundPlayed]);
+  }, [isNearlyCalled, soundPlayed]);
 
   function formatTime(totalSeconds) {
     const s = Math.max(0, Number(totalSeconds) || 0);
@@ -97,78 +107,107 @@ export default function QueueStatus() {
     return "Unknown";
   }
 
-  // QR/share URL to open this same page on a phone
-  // NOTE: Uses VITE_APP_URL from .env file, or falls back to current window location
-  const shareUrl = useMemo(() => {
-    if (!visitId || !anonToken) {
-      console.log("shareUrl is null because visitId:", visitId, "or anonToken:", anonToken);
-      return null;
-    }
-
-    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin;
-
-    const url = `${baseUrl}/queue-status?visitId=${encodeURIComponent(
-      visitId
-    )}&token=${encodeURIComponent(anonToken)}`;
-    console.log("shareUrl created:", url);
-    return url;
-  }, [visitId, anonToken]);
-
-  // Fetch visit data
+  // Initial fetch of visit data using public endpoint
   useEffect(() => {
-    if (!visitId) return;
-
-    let cancelled = false;
+    if (!visitId || !anonToken) return;
 
     const fetchVisit = async () => {
       setStatusError("");
 
       try {
-        const data = await apiRequest(`/visit/${visitId}`);
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to fetch visit status");
+        }
+
+        const data = await response.json();
         const visit = data?.visit;
 
         if (!visit) {
-          if (!cancelled) setStatusError("Visit data not found in API response.");
+          setStatusError("Visit data not found in API response.");
           return;
         }
 
         const qp = visit.queue_position ?? visit.queuePosition ?? null;
         const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+        const ct = visit.checkin_time ?? visit.checkinTime ?? null;
 
-        if (!cancelled) {
-          if (qp != null) setQueuePosition(qp);
-          if (pw != null) setEstWaitMinutes(pw);
+        if (qp != null) setQueuePosition(qp);
+        if (pw != null) setEstWaitMinutes(pw);
+        if (ct != null) setCheckinTime(ct);
 
-          if (visit.department && !departmentFromState) setDepartment(visit.department);
-          if (visit.severity != null && severityFromState == null) setSeverity(visit.severity);
+        setLastUpdated(new Date().toLocaleString());
 
-          setLastUpdated(new Date().toLocaleString());
-
-          if (qp == null) setStatusError("Visit loaded, but queue position is missing.");
+        if (qp == null) {
+          setStatusError("Visit loaded, but queue position is missing.");
         }
       } catch (err) {
-        if (!cancelled) setStatusError(String(err?.message || err));
+        console.error("Error fetching visit:", err);
+        setStatusError(String(err?.message || err));
       }
     };
 
     fetchVisit();
-    const interval = setInterval(fetchVisit, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
+  }, [visitId, anonToken]);
+
+  // WebSocket real-time updates
+  useEffect(() => {
+    if (!socket || !visitId || !anonToken) return;
+
+    const handleQueueUpdate = async () => {
+      // Reload visit data when queue updates using public endpoint
+      try {
+        const response = await fetch(
+          `${API_BASE}/visit/${visitId}/public?token=${encodeURIComponent(anonToken)}`
+        );
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const visit = data?.visit;
+
+        if (visit) {
+          const qp = visit.queue_position ?? visit.queuePosition ?? null;
+          const pw = visit.predicted_wait_minutes ?? visit.predictedWait ?? null;
+          const ct = visit.checkin_time ?? visit.checkinTime ?? null;
+
+          if (qp != null) setQueuePosition(qp);
+          if (pw != null) setEstWaitMinutes(pw);
+          if (ct != null) setCheckinTime(ct);
+
+          setLastUpdated(new Date().toLocaleString());
+        }
+      } catch (err) {
+        console.error("Error reloading visit after queue update:", err);
+      }
     };
-  }, [visitId, departmentFromState, severityFromState]);
+
+    socket.on("queue_update", handleQueueUpdate);
+
+    return () => {
+      socket.off("queue_update", handleQueueUpdate);
+    };
+  }, [socket, visitId, anonToken]);
 
   const handleBackToCheckIn = () => {
-    window.location.href = "/patient-checkin";
+  window.location.href = "http://localhost:3000/patient-checkin";
   };
 
   if (!visitId) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+      <div className="page-gradient flex justify-center relative">
+        {/* Theme Toggle - Top Right */}
+        <div className="absolute top-4 right-4 z-10">
+          <ThemeToggle />
+        </div>
+
         <main className="w-full max-w-3xl px-6 py-10">
           <h1 className="text-3xl font-bold mb-2">Queue Status</h1>
-          <p className="text-slate-300">No visit information found. Please check in again.</p>
+          <p className="subtitle">No visit information found. Please check in again.</p>
 
           <button
             onClick={handleBackToCheckIn}
@@ -182,22 +221,25 @@ export default function QueueStatus() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-medqDark to-medqDeep text-white flex justify-center">
+    <div className="page-gradient flex justify-center relative">
+      {/* Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
+
       <main className="w-full max-w-3xl px-6 py-10">
         <header className="mb-8 flex items-center gap-3">
           <img src={medqLogo} alt="MedQ" className="h-10 w-10" />
           <div>
             <h1 className="text-4xl font-bold">Queue Status</h1>
-            <p className="text-slate-300 text-sm mt-1">
-              Track your position and estimated wait time
-            </p>
+            <p className="subtitle">Track your position and estimated wait time</p>
           </div>
         </header>
 
-        {queuePosition != null && estWaitMinutes != null && queuePosition <= 2 && estWaitMinutes <= 5 && (
+        {isNearlyCalled && (
           <div className="mb-6 bg-green-500/20 border border-green-400 rounded-xl p-4 shadow-md">
             <div className="text-green-300 font-semibold text-lg text-center">
-              🎉 You're Almost Next!
+              You're Almost Next!
             </div>
             <p className="text-green-200 text-sm text-center mt-1">
               You'll be called soon. Please be ready!
@@ -205,15 +247,15 @@ export default function QueueStatus() {
           </div>
         )}
 
-        <div className="bg-white/10 border border-white/10 rounded-2xl p-6 shadow-sm">
+        <div className="card-info rounded-2xl p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
-              <div className="text-slate-300 text-xs">Department</div>
+              <div className="subtitle text-xs !mt-0">Department</div>
               <div className="text-lg font-semibold mt-1">{department || "Unknown"}</div>
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Urgency</div>
+              <div className="subtitle text-xs !mt-0">Urgency</div>
               <div className="text-lg font-semibold mt-1">
                 {severityLabel(severity)}
                 {severity != null ? ` (Severity ${severity})` : ""}
@@ -221,41 +263,29 @@ export default function QueueStatus() {
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Your Queue Number</div>
+              <div className="subtitle text-xs !mt-0">Your Queue Number</div>
               <div className="text-3xl font-bold mt-1">
                 {queuePosition != null ? queuePosition : "Loading..."}
               </div>
-              {statusError ? <div className="text-sm text-red-300 mt-2">{statusError}</div> : null}
+              {statusError ? <div className="text-sm text-red-500 mt-2">{statusError}</div> : null}
             </div>
 
             <div>
-              <div className="text-slate-300 text-xs">Estimated Time Remaining</div>
+              <div className="subtitle text-xs !mt-0">Estimated Time Remaining</div>
               <div className="text-3xl font-bold mt-1">
                 {estWaitMinutes != null ? formatTime(secondsLeft) : "Calculating..."}
               </div>
-              <div className="text-slate-300 text-xs mt-2">
+              <div className="subtitle text-xs mt-2">
                 {lastUpdated ? `Last updated: ${lastUpdated}` : ""}
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <div className="text-slate-300 text-xs">Tracking Token</div>
+          <div className="mt-6 pt-6 border-t border-current/10">
+            <div className="subtitle text-xs !mt-0">Tracking Token</div>
             <div className="font-mono text-sm mt-1 break-all">{anonToken || "N/A"}</div>
           </div>
         </div>
-
-        {shareUrl && (
-          <div className="mt-8 flex flex-col items-center">
-            <div className="text-slate-300 text-xs mb-3">
-              Scan to open this queue status on your phone
-            </div>
-            <div className="mb-3">
-              <QRCode value={shareUrl} size={170} />
-            </div>
-            <div className="text-slate-400 text-xs text-center break-all max-w-md">{shareUrl}</div>
-          </div>
-        )}
 
         <button
           onClick={handleBackToCheckIn}

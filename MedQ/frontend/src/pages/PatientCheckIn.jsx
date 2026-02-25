@@ -109,8 +109,7 @@ export default function PatientCheckIn() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMsg = typeof errorData.error === 'string' ? errorData.error : "Failed to check in";
-        throw new Error(errorMsg);
+        throw new Error(errorData.error || "Failed to check in");
       }
 
       const data = await response.json();
@@ -132,8 +131,7 @@ export default function PatientCheckIn() {
       });
     } catch (err) {
       console.error(err);
-      const errorMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err)) || "Error submitting check-in.";
-      setError(errorMsg);
+      setError(err.message || "Error submitting check-in.");
     } finally {
       setLoading(false);
     }
