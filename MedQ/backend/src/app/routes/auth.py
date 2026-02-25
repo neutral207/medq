@@ -148,8 +148,11 @@ def login():
         return jsonify({'error': 'Invalid credentials'}), 401
     
     #JWT Token
+    # staff['staff_id'] comes from LEFT JOIN to staff table (may be None if names don't match)
+    # Fall back to staff_auth.staff_id (auth_id) when the join doesn't resolve
+    resolved_staff_id = staff['staff_id'] or staff['auth_id']
     payload = {
-        'staff_id': staff['staff_id'],
+        'staff_id': resolved_staff_id,
         'username': staff['username'],
         'role': staff['role'],
         'exp': datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRY_HOURS),
@@ -162,7 +165,7 @@ def login():
     return jsonify({
         'token': token,
         'user': {
-            'staff_id': staff['staff_id'],
+            'staff_id': resolved_staff_id,
             'username': staff['username'],
             'full_name': staff['full_name'],
             'role': staff['role'],

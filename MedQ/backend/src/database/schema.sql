@@ -67,6 +67,15 @@ CREATE TABLE IF NOT EXISTS visit_events (
   payload JSONB
 );
 
+-- Visit Notes
+CREATE TABLE IF NOT EXISTS visit_notes (
+  note_id BIGSERIAL PRIMARY KEY,
+  visit_id UUID NOT NULL REFERENCES visits(visit_id) ON DELETE CASCADE,
+  staff_id INT NOT NULL REFERENCES staff(staff_id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Hourly aggregates for analytics
 CREATE TABLE IF NOT EXISTS wait_time_agg_hourly (
   bucket_start TIMESTAMPTZ NOT NULL,

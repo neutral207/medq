@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
 import { useWebSocket } from "../contexts/WebSocketContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -8,7 +8,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5000/api
 
 export default function QueueStatus() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { socket } = useWebSocket();
 
   const { visitId, anonToken, department, initialWait, severity } = location.state || {};

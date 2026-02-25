@@ -116,6 +116,11 @@ function QueueCard({ item, actions, onViewDetails, onAction }) {
               <span className="text-slate-400">-</span>
             )}
           </p>
+          {item.noteCount > 0 && (
+            <p className="text-xs text-slate-400 mt-1">
+              {item.noteCount} note{item.noteCount !== 1 ? "s" : ""}
+            </p>
+          )}
         </div>
       </div>
 

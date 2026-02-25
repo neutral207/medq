@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import SummaryCardsRow from "../components/SummaryCardsRow";
 import WaitTimeHeatmap from "../components/WaitTimeHeatmap";
 import { exportToCsv } from "../utils/exportCsv";

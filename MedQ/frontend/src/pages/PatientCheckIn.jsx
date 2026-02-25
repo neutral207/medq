@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import medqLogo from "../assets/images/medq-logo.png";
-import { apiRequest } from "../apiClient";
 import ThemeToggle from "../components/ThemeToggle";
 
 const REASONS = [
