@@ -84,9 +84,7 @@ This project is licensed under the **MIT License** – free for modification and
 ## Contributors
 - **Chad Gibson** - Mentor/instructor
 - **Joel Simpson** – Project Lead, Backend Developer  
-- **Amy Darr** -  UI and dashboard design  
-- **Gustavo Bastos** - DevOps/Database Engineer – Database setup and Docker 
-deployment 
+- **Gustavo Bastos** - Full Stack Developer 
 - **Cheyenne McMahan** - - Machine Learning Engineer – Prediction model creation and maintenance  
 
  - QA Engineer – API and UI testing
